@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DataMatch 화면 프로토타입</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --line: #d9dde3; --text: #1f2933; --sub: #5f6b7a;
+    --primary: #2459d6; --primary-bg: #e8effd;
+    --red: #c62828; --red-bg: #fdecea;
+    --amber: #8a5a00; --amber-bg: #fff3d6;
+    --green: #2e7d32; --green-bg: #e8f5e9;
+    --prod: #b71c1c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+  .envbar { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 24px; display: flex; align-items: center; gap: 24px; }
+  .envbar .brand { font-weight: 700; font-size: 16px; margin-right: 8px; }
+  .env { display: flex; align-items: center; gap: 8px; }
+  .env label { color: var(--sub); font-weight: 600; }
+  select, input[type=text], textarea { font: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: #fff; color: var(--text); }
+  select { min-width: 120px; }
+  .badge-prod { background: var(--prod); color: #fff; font-weight: 700; font-size: 12px; padding: 3px 8px; border-radius: 4px; }
+  .env.is-prod select { border-color: var(--prod); box-shadow: 0 0 0 2px #f6c8c8; }
+  main { max-width: 1280px; margin: 0 auto; padding: 20px 24px 48px; }
+  section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 18px; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  h2 .sc { color: var(--sub); font-weight: 500; font-size: 12px; margin-left: 8px; }
+  .row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .row .lbl { width: 72px; color: var(--sub); font-weight: 600; }
+  .pk { color: var(--sub); }
+  .pk b { color: var(--text); }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border-bottom: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #f0f2f5; font-weight: 600; color: var(--sub); font-size: 13px; }
+  .cols td.chk { width: 44px; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #eceff3; color: var(--sub); margin-left: 6px; }
+  .btn { font: inherit; border: 1px solid var(--line); background: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; padding: 9px 22px; }
+  .btn.danger { color: var(--red); border-color: var(--red); }
+  .split { display: flex; gap: 20px; align-items: flex-start; }
+  .split .left { flex: 1; }
+  .split .right { width: 300px; }
+  textarea { width: 100%; height: 130px; font-family: Consolas, "Malgun Gothic", monospace; resize: none; }
+  textarea.err { border-color: var(--red); }
+  .stat { color: var(--sub); margin-bottom: 8px; }
+  .stat b { color: var(--text); }
+  .stat.over b { color: var(--red); }
+  .errbox { display: none; background: var(--red-bg); border: 1px solid #f3b9b4; color: var(--red); border-radius: 6px; padding: 10px 12px; margin-top: 8px; font-size: 13px; }
+  .errbox ul { margin: 6px 0 0; padding-left: 18px; }
+  .actions { display: flex; justify-content: flex-end; margin-top: 4px; }
+  .hint { color: var(--sub); font-size: 12px; margin-top: 4px; }
+  /* result */
+  .resulthead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .cond { font-weight: 600; }
+  .cond .a, .cond .b { padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 6px; }
+  .cond .a { background: var(--primary-bg); color: var(--primary); }
+  .cond .b { background: var(--red-bg); color: var(--prod); }
+  .summary { color: var(--sub); margin-bottom: 12px; }
+  .summary b { color: var(--text); }
+  .result-split { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .list { width: 360px; border-right: 1px solid var(--line); }
+  .list .item { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .list .item.sel { background: var(--primary-bg); box-shadow: inset 3px 0 0 var(--primary); }
+  .list .no { width: 20px; color: var(--sub); }
+  .list .pair { flex: 1; font-family: Consolas, monospace; font-size: 13px; }
+  .pill { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .pill.ok { background: var(--green-bg); color: var(--green); }
+  .pill.diff { background: var(--red-bg); color: var(--red); }
+  .pill.miss { background: var(--amber-bg); color: var(--amber); }
+  .detail { flex: 1; min-width: 0; }
+  .detail h3 { margin: 0; padding: 10px 14px; font-size: 14px; background: #f7f8fa; border-bottom: 1px solid var(--line); }
+  .detail td.val { font-family: Consolas, "Malgun Gothic", monospace; font-size: 13px; word-break: break-all; }
+  tr.d td { background: var(--red-bg); color: var(--red); font-weight: 600; }
+  tr.d td.fld { color: var(--red); }
+  .st { font-size: 12px; font-weight: 700; }
+  .st.ok { color: var(--green); } .st.diff { color: var(--red); }
+  .null { color: #8a94a3; font-style: italic; font-weight: 400; }
+  /* modal */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(20,28,40,.45); z-index: 10; align-items: center; justify-content: center; }
+  .modal { background: #fff; border-radius: 12px; width: 460px; padding: 24px 26px; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
+  .modal h4 { margin: 0 0 14px; font-size: 16px; }
+  .bar { height: 12px; border-radius: 6px; background: #e6e9ee; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 48%; background: var(--primary); }
+  .modal .meta { display: flex; justify-content: space-between; margin: 8px 0 18px; color: var(--sub); }
+  .modal .meta b { color: var(--text); }
+  .modal .foot { text-align: right; }
+  /* state switching */
+  .only-result, .only-progress { display: none; }
+  body[data-state="result"] .only-result { display: block; }
+  body[data-state="progress"] .overlay { display: flex; }
+  body[data-state="error"] .errbox { display: block; }
+  body[data-state="error"] textarea { border-color: var(--red); }
+  body[data-state="settings"] .only-settings, body[data-state="error"] .only-settings { display: block; }
+  .note { max-width: 1280px; margin: 0 auto; padding: 0 24px 24px; color: var(--sub); font-size: 12px; }
+</style>
+</head>
+<body data-state="settings">
+
+<div class="envbar">
+  <span class="brand">DataMatch</span>
+  <div class="env"><label>A쪽 환경</label>
+    <select><option>테스트</option><option>개발</option><option>운영</option></select>
+  </div>
+  <div class="env is-prod"><label>B쪽 환경</label>
+    <select><option>운영</option><option>테스트</option><option>개발</option></select>
+    <span class="badge-prod">⚠ 운영 DB</span>
+  </div>
+</div>
+
+<main>
+  <section class="card" id="sc01">
+    <h2>거래 비교 설정<span class="sc">SC-01</span></h2>
+
+    <div class="row">
+      <span class="lbl">테이블</span>
+      <input type="text" style="width:340px" value="PAYZONE.TB_PAY_TRX">
+      <span class="pk">PK: <b>TRX_NO</b></span>
+    </div>
+
+    <div class="row" style="margin-bottom:6px">
+      <span class="lbl">컬럼</span>
+      <input type="text" style="width:220px" placeholder="컬럼 검색">
+      <button class="btn">전체 선택</button>
+      <button class="btn">전체 해제</button>
+    </div>
+    <table class="cols" style="margin-bottom:16px">
+      <tr><th></th><th>컬럼명</th><th>타입</th><th>SafeDB 복호화</th></tr>
+      <tr><td class="chk"><input type="checkbox"></td><td>TRX_NO<span class="tag">PK</span></td><td>VARCHAR2(20)</td><td>-</td></tr>
+      <tr><td class="chk"><input type="checkbox" checked></td><td>ORDER_NO</td><td>VARCHAR2(40)</td><td>-</td></tr>
+      <tr><td class="chk"><input type="checkbox" checked></td><td>AMOUNT</td><td>NUMBER</td><td>-</td></tr>
+      <tr><td class="chk"><input type="checkbox" checked></td><td>STATUS</td><td>VARCHAR2(2)</td><td>-</td></tr>
+      <tr><td class="chk"><input type="checkbox" checked></td><td>APPR_MSG</td><td>CLOB</td>
+        <td><label><input type="checkbox" checked> 복호화 대상</label>&nbsp; 정책 <select style="min-width:90px"><option>KDKEY</option><option>PANEN</option></select></td></tr>
+    </table>
+
+    <div class="split">
+      <div class="left">
+        <div class="row" style="margin-bottom:6px"><span class="lbl" style="width:auto">거래번호</span><span class="hint" style="margin:0">한 줄에 거래번호A,거래번호B (쉼표 또는 탭 구분)</span></div>
+        <textarea id="ta"></textarea>
+        <div class="errbox" id="errbox"></div>
+      </div>
+      <div class="right">
+        <div class="stat" id="stat"></div>
+        <div class="hint" style="margin-bottom:20px">최대 1,000쌍까지 입력할 수 있습니다.</div>
+        <div class="actions"><button class="btn primary">비교 실행</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card only-result" id="sc03">
+    <div class="resulthead">
+      <h2 style="margin:0">비교 결과<span class="sc">SC-03</span></h2>
+      <button class="btn">엑셀 다운로드</button>
+    </div>
+    <div class="cond"><span class="a">A 테스트</span><span class="b">B 운영</span> PAYZONE.TB_PAY_TRX · 비교 컬럼 4개</div>
+    <div class="summary" style="margin-top:6px">총 <b>4쌍</b> · 일치 <b>1</b> · 불일치 <b>2</b> · 누락 <b>1</b></div>
+
+    <div class="result-split">
+      <div class="list">
+        <div class="item"><span class="no">1</span><span class="pair">T20261109001 - P20261109001</span><span class="pill ok">일치</span></div>
+        <div class="item sel"><span class="no">2</span><span class="pair">T20261109002 - P20261109002</span><span class="pill diff">불일치(3)</span></div>
+        <div class="item"><span class="no">3</span><span class="pair">T20261109003 - P20261109003</span><span class="pill miss">누락(B 없음)</span></div>
+        <div class="item"><span class="no">4</span><span class="pair">T20261109004 - P20261109004</span><span class="pill diff">불일치(1)</span></div>
+      </div>
+      <div class="detail">
+        <h3>상세 · T20261109002 (A 테스트) - P20261109002 (B 운영)</h3>
+        <table>
+          <tr><th>컬럼·필드</th><th>A값 (테스트)</th><th>B값 (운영)</th><th>상태</th></tr>
+          <tr class="d"><td class="fld">ORDER_NO</td><td class="val">ORD-TEST-0002</td><td class="val">ORD-20261109-7781</td><td class="st diff">불일치</td></tr>
+          <tr><td>AMOUNT</td><td class="val">12000</td><td class="val">12000</td><td class="st ok">일치</td></tr>
+          <tr><td>STATUS</td><td class="val">00</td><td class="val">00</td><td class="st ok">일치</td></tr>
+          <tr><td>APPR_MSG.res_cd</td><td class="val">0000</td><td class="val">0000</td><td class="st ok">일치</td></tr>
+          <tr><td>APPR_MSG.amount</td><td class="val">12000</td><td class="val">12000</td><td class="st ok">일치</td></tr>
+          <tr class="d"><td class="fld">APPR_MSG.approval_no</td><td class="val">30001234</td><td class="val">30009876</td><td class="st diff">불일치</td></tr>
+          <tr class="d"><td class="fld">APPR_MSG.memo</td><td class="val"><span class="null" style="color:#c62828">(NULL)</span></td><td class="val">정기 결제</td><td class="st diff">불일치</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+<div class="note">※ 화면 정의서(docs/3-screen-specification.md) 확인용 프로토타입입니다. 표시된 거래번호·값은 모두 예시 데이터이며 실제 DB와 연결되어 있지 않습니다.</div>
+
+<div class="overlay" id="sc02">
+  <div class="modal">
+    <h4>비교 진행 중</h4>
+    <div class="bar"><i style="width:40%"></i></div>
+    <div class="meta"><span>처리 <b>200</b> / 전체 <b>500</b>쌍</span><b>40%</b></div>
+    <div class="foot"><button class="btn danger">비교 중지</button></div>
+  </div>
+</div>
+
+<script>
+  var state = (location.hash || '#settings').slice(1);
+  document.body.setAttribute('data-state', state);
+  var ta = document.getElementById('ta'), stat = document.getElementById('stat'), eb = document.getElementById('errbox');
+  var good = "T20261109001,P20261109001\nT20261109002,P20261109002\nT20261109003,P20261109003\nT20261109004,P20261109004";
+  var bad = "T20261109001,P20261109001\nT20261109002 P20261109002\nT20261109003,\nT20261109004,P20261109004,X";
+  if (state === 'error') {
+    ta.value = bad; ta.className = 'err';
+    stat.innerHTML = '입력 <b>1쌍</b> / 최대 1,000쌍<br><span style="color:#c62828">오류 <b style="color:#c62828">3줄</b></span>';
+    eb.innerHTML = '입력 형식 오류가 있어 비교를 시작할 수 없습니다. 표시된 줄을 수정해 주세요.<ul>' +
+      '<li>2번째 줄: 쉼표나 탭으로 거래번호A와 거래번호B를 구분해 주세요.</li>' +
+      '<li>3번째 줄: 거래번호B가 비어 있습니다.</li>' +
+      '<li>4번째 줄: 한 줄에는 거래번호 두 개만 입력할 수 있습니다.</li></ul>';
+  } else if (state === 'progress') {
+    var lines = [];
+    for (var i = 1; i <= 500; i++) {
+      var n = String(i).padStart(3, '0');
+      lines.push('T20261109' + n + ',P20261109' + n);
+    }
+    ta.value = lines.join('\n');
+    stat.innerHTML = '입력 <b>500쌍</b> / 최대 1,000쌍<br>오류 <b>0줄</b>';
+  } else {
+    ta.value = good;
+    stat.innerHTML = '입력 <b>4쌍</b> / 최대 1,000쌍<br>오류 <b>0줄</b>';
+  }
+</script>
+</body>
+</html>
