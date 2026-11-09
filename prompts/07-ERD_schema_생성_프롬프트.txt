@@ -1,0 +1,7 @@
+## 1) ERD 작성
+
+적절한 서브에이전트를 사용해서 @docs/2-PRD.md, @docs/1-domain-definition.md 정보를 바탕으로 ERD를 mermaid 형식으로 작성하고 docs/7-erd.md 로 저장해줘. 만일 아키텍처 다이어그램에 ERD가 포함되어 있다면 분리시키는 방식으로 작업해
+
+## 2) DDL 작성 (ERD 확정 후)
+
+@docs/7-erd.md 를 활용해 데이터베이스 생성을 위한 DDL 문을 작성해서 docs/schema.sql 파일에 저장해줘
