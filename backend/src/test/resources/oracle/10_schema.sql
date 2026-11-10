@@ -1,0 +1,126 @@
+-- DataMatch 로컬 Oracle 테스트 스키마 (SETUP-05)
+-- DM_IT_OWNER 로 실행한다. 테스트 로더(OracleTestSchemaLoader) 또는 SQL*Plus 모두에서 실행할 수 있도록
+-- 모든 문장은 끝에 세미콜론 없이 "/" 한 줄로 구분한다. 다시 실행하면 DM_IT_ 객체를 지우고 새로 만든다.
+
+-- 기존 DM_IT_ 테이블·함수 삭제
+BEGIN
+  FOR t IN (SELECT table_name FROM user_tables WHERE table_name LIKE 'DM\_IT\_%' ESCAPE '\') LOOP
+    EXECUTE IMMEDIATE 'DROP TABLE "' || t.table_name || '" CASCADE CONSTRAINTS PURGE';
+  END LOOP;
+  FOR f IN (SELECT object_name FROM user_objects WHERE object_type = 'FUNCTION' AND object_name LIKE 'DM\_IT\_%' ESCAPE '\') LOOP
+    EXECUTE IMMEDIATE 'DROP FUNCTION "' || f.object_name || '"';
+  END LOOP;
+END;
+/
+
+-- 문자형 PK 거래 테이블(가짜 암호문 CLOB 포함)
+CREATE TABLE DM_IT_TRX_STR (
+  TRX_NO     VARCHAR2(20) PRIMARY KEY,
+  ORDER_NO   VARCHAR2(40),
+  AMOUNT     NUMBER(12),
+  STATUS     CHAR(2),
+  MEMO       VARCHAR2(200),
+  APPR_MSG   CLOB,
+  CARD_ENC   CLOB,
+  LONG_TEXT  CLOB,
+  CREATED_AT DATE
+)
+/
+
+-- NUMBER PK 거래 테이블
+CREATE TABLE DM_IT_TRX_NUM (
+  TRX_ID   NUMBER(15) PRIMARY KEY,
+  ORDER_NO VARCHAR2(40),
+  AMOUNT   NUMBER(12, 2)
+)
+/
+
+-- 선택 불가 테이블: 복합 PK, PK 없음, DATE PK
+CREATE TABLE DM_IT_COMPOSITE (
+  K1  VARCHAR2(10),
+  K2  VARCHAR2(10),
+  VAL VARCHAR2(20),
+  CONSTRAINT DM_IT_COMPOSITE_PK PRIMARY KEY (K1, K2)
+)
+/
+CREATE TABLE DM_IT_NOPK (
+  ID  VARCHAR2(10),
+  VAL VARCHAR2(20)
+)
+/
+CREATE TABLE DM_IT_DATEPK (
+  D   DATE PRIMARY KEY,
+  VAL VARCHAR2(20)
+)
+/
+
+-- 기술 설계서 6.4의 타입을 모두 가진 테이블
+CREATE TABLE DM_IT_TYPES (
+  ID          VARCHAR2(10) PRIMARY KEY,
+  C_CHAR      CHAR(5),
+  C_VARCHAR   VARCHAR2(50),
+  C_NCHAR     NCHAR(5),
+  C_NVARCHAR  NVARCHAR2(50),
+  C_NUMBER    NUMBER,
+  C_NUMSCALE  NUMBER(10, 2),
+  C_FLOAT     FLOAT,
+  C_BDOUBLE   BINARY_DOUBLE,
+  C_DATE      DATE,
+  C_TS        TIMESTAMP(9),
+  C_TSTZ      TIMESTAMP(9) WITH TIME ZONE,
+  C_TSLTZ     TIMESTAMP WITH LOCAL TIME ZONE,
+  C_CLOB      CLOB,
+  C_NCLOB     NCLOB,
+  C_BLOB      BLOB,
+  C_RAW       RAW(16),
+  C_INTERVAL  INTERVAL DAY TO SECOND
+)
+/
+
+-- 이스케이프 확인용: 'A_B' 검색이 DM_IT_AXB 를 찾으면 안 된다
+CREATE TABLE DM_IT_A_B (ID VARCHAR2(10) PRIMARY KEY)
+/
+CREATE TABLE DM_IT_AXB (ID VARCHAR2(10) PRIMARY KEY)
+/
+
+-- 후보 초과 확인용: 'DM_IT_SEARCH' 로 35개가 검색된다
+BEGIN
+  FOR i IN 1 .. 35 LOOP
+    EXECUTE IMMEDIATE 'CREATE TABLE DM_IT_SEARCH_' || LPAD(i, 2, '0') || ' (ID VARCHAR2(10) PRIMARY KEY)';
+  END LOOP;
+END;
+/
+
+-- 느린 조회 확인용: 행마다 2초 대기하는 함수를 가상 컬럼으로 쓴다(타임아웃·중지 테스트)
+CREATE OR REPLACE FUNCTION DM_IT_SLEEP(p_id VARCHAR2) RETURN NUMBER DETERMINISTIC IS
+BEGIN
+  DBMS_SESSION.SLEEP(2);
+  RETURN 1;
+END;
+/
+CREATE TABLE DM_IT_SLOW (
+  ID       VARCHAR2(10) PRIMARY KEY,
+  VAL      VARCHAR2(20),
+  SLOW_COL NUMBER GENERATED ALWAYS AS (DM_IT_SLEEP(ID)) VIRTUAL
+)
+/
+
+-- 권한 차이 확인용: DM_IT_RO_B 에는 SELECT 권한을 주지 않는다(TA-05)
+CREATE TABLE DM_IT_NO_B_GRANT (
+  ID  VARCHAR2(10) PRIMARY KEY,
+  VAL VARCHAR2(20)
+)
+/
+
+-- 읽기 전용 사용자 권한: SELECT 만 부여한다
+BEGIN
+  FOR t IN (SELECT table_name FROM user_tables WHERE table_name LIKE 'DM\_IT\_%' ESCAPE '\') LOOP
+    EXECUTE IMMEDIATE 'GRANT SELECT ON "' || t.table_name || '" TO DM_IT_RO_A';
+    IF t.table_name <> 'DM_IT_NO_B_GRANT' THEN
+      EXECUTE IMMEDIATE 'GRANT SELECT ON "' || t.table_name || '" TO DM_IT_RO_B';
+    END IF;
+  END LOOP;
+  EXECUTE IMMEDIATE 'GRANT EXECUTE ON DM_IT_SLEEP TO DM_IT_RO_A';
+  EXECUTE IMMEDIATE 'GRANT EXECUTE ON DM_IT_SLEEP TO DM_IT_RO_B';
+END;
+/

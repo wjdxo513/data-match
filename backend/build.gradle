@@ -1,0 +1,238 @@
+plugins {
+    id 'java'
+    id 'jacoco'
+    id 'org.springframework.boot' version '2.7.18'
+    id 'io.spring.dependency-management' version '1.1.4'
+}
+
+/*
+ * DataMatch 백엔드 (기술 설계서 TD-01: JDK 11, Spring Boot 2.7.18, Gradle 8.9).
+ * SafeDB 벤더 jar는 libs/safedb-lib/ 의 파일을 그대로 사용한다(TD-04).
+ */
+group = 'kr.kicc'
+version = '0.1.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.apache.poi:poi-ooxml:5.2.5'
+    runtimeOnly 'com.oracle.database.jdbc:ojdbc8'
+
+    // SafeDB 벤더 jar 9개(TD-04). SimpleSafeDB 는 SafeDBClient_v2.3.20.jar 에 있다.
+    implementation fileTree(dir: 'libs/safedb-lib', include: ['*.jar'])
+
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    testCompileOnly 'org.projectlombok:lombok:1.18.30'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+// SafeDB jar는 Git에 없으므로(TD-04) 빠져 있으면 컴파일 오류 대신 배치 안내를 보여준다.
+tasks.named('compileJava') {
+    doFirst {
+        def jars = fileTree(dir: 'libs/safedb-lib', include: '*.jar').files
+        if (jars.size() != 9) {
+            throw new GradleException("libs/safedb-lib/ 의 SafeDB jar가 ${jars.size()}개입니다(9개 필요). libs/safedb-lib/README.txt 를 참고해 복사해 주세요.")
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('test') {
+    useJUnitPlatform {
+        excludeTags 'oracle'
+    }
+    systemProperty 'file.encoding', 'UTF-8'
+    finalizedBy 'jacocoTestReport'
+}
+
+/*
+ * 로컬 Oracle 테스트(SETUP-05, 실행 계획 D-02).
+ * 접속 정보는 환경 변수 DATAMATCH_IT_* 로만 받는다. 환경 변수가 없으면 테스트는 건너뛰어져 미검증으로 남는다.
+ * - oracleTestSetup: DM_IT_OWNER 로 테스트 스키마와 합성 데이터를 적재한다.
+ * - oracleTest: @OracleIntegrationTest(태그 oracle) 테스트만 실행한다.
+ */
+def hasOracleTestEnv = System.getenv('DATAMATCH_IT_URL') != null && !System.getenv('DATAMATCH_IT_URL').isEmpty()
+
+tasks.register('oracleTestSetup', JavaExec) {
+    group = 'verification'
+    description = '로컬 Oracle 테스트 스키마와 합성 데이터를 적재한다(DM_IT_OWNER).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'kr.kicc.datamatch.it.OracleTestSchemaLoader'
+    systemProperty 'file.encoding', 'UTF-8'
+    onlyIf { hasOracleTestEnv }
+}
+
+tasks.register('oracleTest', Test) {
+    group = 'verification'
+    description = '로컬 Oracle 테스트 스키마가 필요한 테스트를 실행한다.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'oracle'
+    }
+    systemProperty 'file.encoding', 'UTF-8'
+    dependsOn 'oracleTestSetup'
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = true
+    }
+}
+
+/*
+ * E2E 서버(INT-02, 실행 계획 PL-05). 로컬 Oracle 테스트 스키마와 가짜 복호화로 127.0.0.1:18080 에서 실행한다.
+ * 환경: dev=DM_IT_RO_A, test·prod=DM_IT_RO_B. -Pe2eBrokenEnv=prod 처럼 지정하면 그 환경을 닫힌 포트로 바꾼다(연결 실패 재현).
+ * 접속 정보는 DATAMATCH_IT_* 환경 변수에서 읽어 자식 프로세스 환경 변수로만 넘긴다.
+ */
+tasks.register('e2eServer', JavaExec) {
+    group = 'verification'
+    description = 'E2E 테스트용 서버를 실행한다(가짜 복호화, 로컬 Oracle).'
+    dependsOn 'buildFrontend', 'testClasses'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'kr.kicc.datamatch.e2e.E2eServer'
+    systemProperty 'file.encoding', 'UTF-8'
+    onlyIf { hasOracleTestEnv }
+    doFirst {
+        def url = System.getenv('DATAMATCH_IT_URL')
+        def broken = project.findProperty('e2eBrokenEnv')
+        def roles = [dev: 'RO_A', test: 'RO_B', prod: 'RO_B']
+        roles.each { env, role ->
+            def key = "DATAMATCH_ENVIRONMENTS_${env.toUpperCase()}"
+            environment "${key}_URL", (env == broken ? url.replaceFirst(/:\d+\//, ':1/') : url)
+            environment "${key}_USERNAME", System.getenv("DATAMATCH_IT_${role}_USER")
+            environment "${key}_PASSWORD", System.getenv("DATAMATCH_IT_${role}_PASSWORD")
+        }
+    }
+}
+
+/*
+ * 커버리지 측정 범위(실행 계획 D-01): 단위 테스트가 가능한 코드의 라인 커버리지를 본다.
+ * 시작 클래스, 실제 SimpleSafeDB 호출 래퍼, Oracle에 직접 의존하는 쿼리 실행부는 제외한다.
+ */
+def coverageExcludes = [
+    'kr/kicc/datamatch/DataMatchApplication*',
+    'kr/kicc/datamatch/safedb/SimpleSafeDbClient*',
+    'kr/kicc/datamatch/**/Oracle*Repository*'
+]
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
+    classDirectories.setFrom(files(classDirectories.files.collect {
+        fileTree(dir: it, exclude: coverageExcludes)
+    }))
+}
+
+springBoot {
+    mainClass = 'kr.kicc.datamatch.DataMatchApplication'
+}
+
+/*
+ * ===== 빌드·배포 구성 (SETUP-03, 기술 설계서 TD-03, 3.2절, 4.3절) =====
+ * - buildFrontend: frontend 를 빌드해 src/main/resources/static 으로 복사한다(-PskipFrontend 로 생략).
+ * - jar: 애플리케이션 클래스와 정적 파일만 담은 datamatch.jar (fat jar 미사용).
+ * - distZip: start.bat, datamatch.jar, lib/, config/ 예시, 안내 문서를 담은 배포 zip.
+ * - verifyDistZip: zip 구조와 민감 파일 미포함을 검사한다.
+ */
+def frontendDir = file('../frontend')
+def staticDir = file('src/main/resources/static')
+def skipFrontend = project.hasProperty('skipFrontend')
+def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+def npmCommand = isWindows ? ['cmd', '/c', 'npm'] : ['npm']
+
+tasks.register('npmCi', Exec) {
+    group = 'frontend'
+    workingDir frontendDir
+    commandLine npmCommand + ['ci', '--no-audit', '--no-fund']
+    onlyIf { !skipFrontend }
+}
+
+tasks.register('npmBuild', Exec) {
+    group = 'frontend'
+    dependsOn 'npmCi'
+    workingDir frontendDir
+    commandLine npmCommand + ['run', 'build']
+    onlyIf { !skipFrontend }
+}
+
+tasks.register('buildFrontend', Sync) {
+    group = 'frontend'
+    description = 'frontend 빌드 결과를 src/main/resources/static 으로 복사한다.'
+    dependsOn 'npmBuild'
+    from(new File(frontendDir, 'dist'))
+    into staticDir
+    onlyIf { !skipFrontend }
+}
+
+// 테스트 실행 때마다 프론트를 빌드하지 않도록, 프론트 빌드는 jar 를 만들 때만 수행한다.
+tasks.named('processResources') {
+    mustRunAfter 'buildFrontend'
+}
+
+tasks.named('bootJar') {
+    enabled = false
+}
+
+tasks.named('jar') {
+    enabled = true
+    dependsOn 'buildFrontend'
+    archiveFileName = 'datamatch.jar'
+}
+
+def distName = "datamatch-${version}"
+def sensitiveConfigFiles = ['datamatch.properties', 'SafeDBAccess.properties', 'SafeDBMap_config.xml', 'inilog4j.properties']
+
+tasks.register('distZip', Zip) {
+    group = 'distribution'
+    description = '배포 zip(start.bat, datamatch.jar, lib/, config/)을 만든다.'
+    dependsOn 'jar'
+    archiveFileName = "${distName}.zip"
+    destinationDirectory = layout.buildDirectory.dir('distributions')
+    into(distName) {
+        from('scripts') { include 'start.bat', 'README.txt' }
+        from(tasks.named('jar'))
+        into('lib') { from configurations.runtimeClasspath }
+        into('config') {
+            from('config') { include 'datamatch.properties.example' }
+        }
+    }
+    finalizedBy 'verifyDistZip'
+}
+
+tasks.register('verifyDistZip') {
+    group = 'verification'
+    description = '배포 zip 구조와 민감 파일 미포함을 검사한다.'
+    dependsOn 'distZip'
+    doLast {
+        def zipFile = tasks.named('distZip').get().archiveFile.get().asFile
+        def entries = new java.util.zip.ZipFile(zipFile).withCloseable { z -> z.entries().collect { it.name } }
+        def required = ["${distName}/start.bat", "${distName}/README.txt", "${distName}/datamatch.jar",
+                        "${distName}/config/datamatch.properties.example"].collect { it.toString() }
+        required.each { if (!entries.contains(it)) throw new GradleException("배포 zip에 필수 파일이 없습니다: ${it}") }
+        def safedbJars = entries.findAll { it.startsWith("${distName}/lib/") && it.endsWith('.jar') && file("libs/safedb-lib/${it.substring(it.lastIndexOf('/') + 1)}").isFile() }
+        if (safedbJars.size() != 9) throw new GradleException("lib/ 의 SafeDB jar 수가 9개가 아닙니다: ${safedbJars.size()}")
+        def leaked = entries.findAll { e -> sensitiveConfigFiles.any { s -> e.endsWith('/' + s) } }
+        if (!leaked.isEmpty()) throw new GradleException("배포 zip에 민감 설정 파일이 들어 있습니다: ${leaked}")
+        def jarFile = tasks.named('jar').get().archiveFile.get().asFile
+        def hasIndex = new java.util.zip.ZipFile(jarFile).withCloseable { z -> z.getEntry('static/index.html') != null }
+        if (!skipFrontend && !hasIndex) throw new GradleException('datamatch.jar 에 static/index.html 이 없습니다.')
+        println "verifyDistZip OK: ${zipFile.name} (entries=${entries.size()}, safedbJars=${safedbJars.size()}, static/index.html=${hasIndex})"
+    }
+}

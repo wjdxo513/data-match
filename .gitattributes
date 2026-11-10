@@ -1,0 +1,2 @@
+# Windows 배치 파일은 CRLF 줄바꿈을 유지한다(SETUP-03)
+*.bat text eol=crlf

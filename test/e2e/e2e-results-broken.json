@@ -1,0 +1,14 @@
+[
+  {
+    "id": "SN-E01-2",
+    "result": "통과",
+    "note": "운영 환경(닫힌 포트)으로 테이블 검색 → 연결 실패 안내, 다시 시도 가능",
+    "screenshot": "screenshots/sn-e01-2-table-search-connection-failed.png"
+  },
+  {
+    "id": "SN-E01-1",
+    "result": "통과",
+    "note": "비교 중 B=운영(닫힌 포트) → \"B쪽(운영) DB에 연결하지 못했습니다. 접속 설정을 확인한 뒤 다시 시도해 주세요.\", 부분 결과 없음",
+    "screenshot": "screenshots/sn-e01-1-compare-connection-failed.png"
+  }
+]

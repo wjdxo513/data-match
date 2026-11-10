@@ -12,6 +12,12 @@
 | v1.2 | 2026-11-09 | Claude | 확정 | 최종 검토 결과 반영(후보 초과 판정 쿼리 정정, API 오류 코드 보완, 경로·문구 정리) |
 | v1.3 | 2026-11-09 | Claude | 확정 | 패키지명 확정(D-05)과 `JOB_RUNNING` 화면 안내 참조 반영, 기준 문서 버전 갱신 |
 | v1.4 | 2026-11-09 | Claude | 확정 | 로컬 Oracle을 통합·E2E 테스트에 적극 사용하도록 10장 테스트 전략 갱신 |
+| v1.5 | 2026-11-09 | Claude | 확정 | 사전 확인 결과 반영(SafeDB 설정 탐색, 로그인 대기 시간, 작업 단위 로그인), 외부망 개발 PC 명시 |
+| v1.6 | 2026-11-10 | Claude | 확정 | SETUP-01·02에서 고정한 라이브러리 버전을 2장에 반영 |
+| v1.7 | 2026-11-10 | Claude | 확정 | SETUP-04 결과를 TA-01에 기록 |
+| v1.8 | 2026-11-10 | Claude | 확정 | BE-01 결과 반영(error 패키지, 오류 코드별 HTTP 상태) |
+| v1.9 | 2026-11-10 | Claude | 확정 | INT-03 실측 결과를 TA-09에 기록 |
+| v1.10 | 2026-11-10 | Claude | 확정 | SafeDB jar를 Git에서 제외하도록 TD-04 변경(공개 저장소) |
 
 ## 변경 이력
 
@@ -25,6 +31,12 @@
 | v1.2 | 2026-11-09 | 머리말, 1장(1.1 TD-04, 1.2), 6.2, 8장, 9.3 | 수정 | `ROWNUM <= 30`으로는 30건 초과 여부를 알 수 없어 `ROWNUM <= 31`로 조회하고 31번째 행 존재 시 `truncated`로 정정, `/api/tables` 오류에 `INVALID_INPUT`(검색어 2자 미만) 추가, 중지 요청의 JSON 콘텐츠 타입 규칙 명시, TD-04의 jar 경로를 `backend/libs/safedb-lib/`로 통일, 1.2의 지난 버전 표기 삭제, 기준 문서 버전 갱신 | Claude |
 | v1.3 | 2026-11-09 | 머리말, 4.1, 7.1 | 수정 | 실행 계획 D-05 확정에 따라 패키지명을 제안에서 확정으로 변경, 7.1에 `JOB_RUNNING`의 화면 안내(화면 정의서 WA-13) 참조 추가, 기준 문서를 PRD v1.3·시나리오 v1.5·화면 정의서 v1.5로 갱신 | Claude |
 | v1.4 | 2026-11-09 | 10장 | 수정 | 사용자 요청에 따라 백엔드 통합 테스트를 개발 PC의 로컬 Oracle 전용 테스트 스키마로 필수 실행하고, E2E를 "가짜 DB" 대신 로컬 Oracle 테스트 스키마와 가짜 복호화로 수행하도록 변경, 다른 스키마를 변경하지 않는 원칙 추가 | Claude |
+| v1.5 | 2026-11-09 | 1.1(TD-10), 2장, 3.2, 5장(FR-07), 7.3, 12장(TA-01·02·14) | 수정 | 2026-11-09 사전 확인 결과로 `SafeDBAccess.properties`의 classpath 탐색을 확인해 3.2와 TA-01을 갱신, SafeDB 서버 연결 불가 시 로그인이 약 110초 걸리는 것을 확인해 로그인을 작업 단위 1회로 제한하는 설계를 TD-10·5장에 추가하고 7.3에 중지 지연을 명시, 개발 PC가 외부망이라 실제 연동은 사내망 PC에서 검증함을 2장·TA-02에 기록, TA-14 추가 | Claude |
+| v1.6 | 2026-11-10 | 2장 | 수정 | SETUP-01·02 수행 결과로 POI 5.2.5, Lombok 1.18.30, React 18.3.1, Vite 8.3.7, TypeScript 5.9.3, Vitest 5.1.0, Testing Library 16.3.3, jsdom 31.0.0을 기재(설계 결정 변경 없음) | Claude |
+| v1.7 | 2026-11-10 | 12장(TA-01) | 수정 | SETUP-04에서 압축을 푼 배포 구조로 SafeDB 설정 탐색 규칙을 재현한 결과를 TA-01에 추가(남은 `SafeDBMap_config.xml` 위치 확인은 INT-04 M-10) | Claude |
+| v1.8 | 2026-11-10 | 4.1, 8장 | 추가 | 하위 계층이 web을 참조하지 않도록 오류 코드·예외를 `error` 패키지에 두기로 하고 4.1에 반영, 실행 계획 PL-04에 따라 BE-01에서 정한 오류 코드별 HTTP 상태 표와 보안 필터용 코드(`FORBIDDEN_REQUEST` 403, `UNSUPPORTED_MEDIA_TYPE` 415)를 8장에 추가 | Claude |
+| v1.9 | 2026-11-10 | 12장(TA-09) | 수정 | INT-03의 배포 zip 실측 결과(처리 시간, 최대 힙)를 TA-09 근거로 기록하고 초기값 유지를 명시 | Claude |
+| v1.10 | 2026-11-10 | 1.1(TD-04), 4.1, 4.2 | 수정 | 원격 저장소가 공개 저장소이므로 상용 라이브러리인 SafeDB jar 9개를 Git에서 제외하고, `backend/libs/safedb-lib/README.txt`로 복사 방법을 안내하며 jar가 9개가 아니면 빌드를 중단하도록 변경 | Claude |
 
 > 구분: 신규 / 추가 / 수정 / 삭제. 버전을 올릴 때는 '버전 이력'에 한 줄을 추가하고, 세부 변경 사항은 '변경 이력'에 섹션 단위로 기록한다.
 
@@ -41,13 +53,13 @@
 | TD-01 | 런타임은 JDK 11, Spring Boot 2.7.18, Gradle 8.9(wrapper)로 한다(pgweb-boot와 동일 조합)               | 2장  |
 | TD-02 | 모놀리식 단일 Spring Boot 애플리케이션이며 React 빌드 결과를 정적 리소스로 함께 서비스한다. 신규 DB·캐시·큐는 두지 않는다 | 3장  |
 | TD-03 | 배포는 `datamatch.jar`, `lib/`, `config/`, `start.bat`을 담은 zip이다. 벤더 jar 호환성 때문에 단일 fat jar는 쓰지 않는다 | 3장  |
-| TD-04 | SafeDB jar 9개는 pgweb-boot의 `libs/safedb-lib/`와 같이 `backend/libs/safedb-lib/`에 복사해 Git에 포함한다. SafeDB 설정 파일은 Git에서 제외한다 | 4장  |
+| TD-04 | SafeDB jar 9개는 pgweb-boot의 `libs/safedb-lib/`와 같이 `backend/libs/safedb-lib/`에 두고 빌드에 포함한다. jar는 상용 라이브러리이고 원격 저장소가 공개이므로 Git에서 제외하며, 빌드하는 PC에서 별도로 복사한다(`backend/libs/safedb-lib/README.txt`, 9개가 아니면 빌드 중단). SafeDB 설정 파일도 Git에서 제외한다 | 4장  |
 | TD-05 | DB 접근은 JDBC `JdbcTemplate` + 환경별 HikariCP이며, 읽기 전용 계정과 SELECT 전용 SQL 생성기로 이중 방어한다 | 6장  |
 | TD-06 | 환경 접속 정보는 `config/datamatch.properties`에 평문으로 두고(pgweb-boot와 동일) Git에서 제외한다. 예시 파일만 Git에 포함한다 | 6장  |
 | TD-07 | 테이블·컬럼 메타데이터는 `ALL_*` 딕셔너리 뷰를 서버에서 검색한다. 자동완성은 입력 지연 300ms, 2자 이상, 후보 최대 30건이다 (WA-07) | 6장  |
 | TD-08 | 비교는 100쌍 단위 청크 파이프라인으로 처리한다. 청크마다 A·B를 각각 묶음 조회하고 복호화·비교한 뒤 처리 건수를 올린다 | 6~7장 |
 | TD-09 | 값 비교는 타입별로 정해진 문자열 변환 결과 기준이다(6.4)                                              | 6장  |
-| TD-10 | 복호화는 `SimpleSafeDB` 어댑터이며 순차 처리한다. KDKEY는 EUC-KR, PANEN은 UTF-8로 디코딩한다           | 5장  |
+| TD-10 | 복호화는 `SimpleSafeDB` 어댑터이며 순차 처리한다. KDKEY는 EUC-KR, PANEN은 UTF-8로 디코딩한다. 로그인은 비교 작업마다 1회만 시도하고 실패하면 그 작업의 나머지 복호화는 즉시 복호화 오류로 처리한다 | 5장  |
 | TD-11 | JSON은 Jackson으로 최상위 필드를 펼쳐 비교한다. 숫자는 BigDecimal로 읽어 표기 형식을 보존한다          | 5장  |
 | TD-12 | 작업은 인메모리 `JobManager`가 관리하며 동시 실행은 1개, 보관하는 결과는 마지막 작업 1개다            | 7장  |
 | TD-13 | 진행률은 Polling(1초)으로 전달한다 (WA-07)                                                             | 7장  |
@@ -76,15 +88,15 @@ PRD, 시나리오, 화면 정의서 사이에 충돌은 없었다. 이 문서의
 | DB 드라이버  | Oracle JDBC `ojdbc8`                   | Boot BOM 관리 버전                | pgweb-boot와 동일. 대상 Oracle 버전 호환은 TA-03에서 확인                                        |
 | DB 접근      | `JdbcTemplate` + HikariCP              | Boot 관리 버전                    | 테이블·컬럼이 동적이라 JPA·MyBatis는 부적합. 서버가 SELECT를 직접 생성                           |
 | JSON         | Jackson                                | Boot 관리 버전                    | 추가 의존성 없음                                                                                  |
-| 엑셀         | Apache POI (`poi-ooxml`, XSSF)         | 5.x                               | 메모리 방식이라 평문이 임시 파일에 남지 않는다(TD-16)                                             |
-| 보일러플레이트 | Lombok (compileOnly)                 | pgweb-boot와 동일 계열            | JDK 11에는 record가 없어 DTO 코드를 줄이기 위함. 사내 프로젝트에서 이미 사용                      |
+| 엑셀         | Apache POI (`poi-ooxml`, XSSF)         | 5.2.5                             | 메모리 방식이라 평문이 임시 파일에 남지 않는다(TD-16)                                             |
+| 보일러플레이트 | Lombok (compileOnly)                 | 1.18.30 (pgweb-boot와 동일)       | JDK 11에는 record가 없어 DTO 코드를 줄이기 위함. 사내 프로젝트에서 이미 사용                      |
 | SafeDB       | `libs/safedb-lib/` jar 9개             | 현재 pgweb-boot 보유 버전         | 4.2절 참조                                                                                        |
-| 프론트엔드   | React, Vite, TypeScript                | React 18.3, Vite·TS는 Node 24.16에서 지원되는 안정 버전 | 화면 상태(자동완성, 체크박스 표, 모달, 요약·상세 분할)를 단순한 상태 관리로 처리. 정확한 버전은 SETUP Task에서 고정 |
-| 프론트 테스트 | Vitest, Testing Library               | Vite 호환 버전                    | Vite와 설정을 공유                                                                                |
+| 프론트엔드   | React, Vite, TypeScript                | React 18.3.1, Vite 8.3.7(@vitejs/plugin-react 6.3.0), TypeScript 5.9.3 | 화면 상태(자동완성, 체크박스 표, 모달, 요약·상세 분할)를 단순한 상태 관리로 처리. TypeScript는 갓 나온 7.x 대신 5.x 최신을 고정 |
+| 프론트 테스트 | Vitest, Testing Library, jsdom        | Vitest 5.1.0, Testing Library React 16.3.3, jsdom 31.0.0 | Vite와 설정을 공유                                                                                |
 | 백엔드 테스트 | JUnit 5, Mockito, AssertJ (`spring-boot-starter-test`) | Boot 관리 버전      | 표준 구성                                                                                         |
 | 서식         | Prettier                               | 저장소 `.prettierrc` 적용         | singleQuote, semi, printWidth 100, trailingComma all                                              |
 
-개발 PC에는 Node.js 24.16.0(npm 11.13.0)이 없어서 공식 배포 zip(SHA256 검증 완료)을 사용자 폴더 `%LOCALAPPDATA%\Programs\nodejs`에 설치하고 사용자 PATH에 등록했다. 이미 열려 있던 터미널과 IDE는 새 터미널 또는 재시작 후부터 인식한다. Node는 프론트 빌드와 E2E 도구(Playwright MCP) 실행에만 필요하며, 담당자 PC에서는 JDK 11만 있으면 된다.
+개발 PC에는 Node.js 24.16.0(npm 11.13.0)이 없어서 공식 배포 zip(SHA256 검증 완료)을 사용자 폴더 `%LOCALAPPDATA%\Programs\nodejs`에 설치하고 사용자 PATH에 등록했다. 이미 열려 있던 터미널과 IDE는 새 터미널 또는 재시작 후부터 인식한다. Node는 프론트 빌드와 E2E 도구(Playwright MCP) 실행에만 필요하며, 담당자 PC에서는 JDK 11만 있으면 된다. 개발 PC는 외부망이라 사내 DB와 SafeDB 서버에 연결할 수 없으므로, 개발 PC의 자동 테스트는 로컬 Oracle과 가짜 복호화로 하고 실제 연동 검증은 사내망의 담당자 PC에서 한다.
 
 React를 쓰는 대신 서버 렌더링과 바닐라 JS를 쓰는 방안도 비교했으나, 자동완성, 컬럼 표의 복호화 지정(체크 상태에 따라 정책 선택이 활성화), 모달 진행, 요약·상세 분할처럼 화면 상태 간 의존이 많아 React가 유지보수에 유리하다고 판단했다. UI 컴포넌트 라이브러리와 전역 상태 라이브러리는 화면이 한 페이지뿐이므로 쓰지 않는다. 스타일은 프로토타입(`docs/prototype/index.html`)의 CSS를 기반으로 일반 CSS 파일 하나로 관리한다.
 
@@ -134,7 +146,7 @@ datamatch-{버전}/
 
 `start.bat`은 현재 폴더 구조를 기준으로 다음을 수행한다. 작업 폴더를 `config`로 옮겨 SafeDB가 `./SafeDBMap_config.xml`처럼 상대경로로 읽을 수 있게 하고, 클래스패스를 `..\datamatch.jar;..\lib\*;.`(마지막 `.`은 `config` 폴더로 `SafeDBAccess.properties`를 classpath 루트에서 찾기 위함)으로 지정하며, `-Dfile.encoding=UTF-8 -Xmx512m`과 로그 경로, 설정 파일 위치(`--spring.config.additional-location=file:./datamatch.properties`)를 지정해 `kr.kicc.datamatch.DataMatchApplication`을 실행한다. 시작 전에 `java` 실행 여부와 `config\datamatch.properties` 존재 여부를 확인하고 없으면 한국어 안내를 출력하며, 시작 후 접속 주소(`http://localhost:18080`)를 콘솔에 표시한다. 브라우저는 자동으로 열지 않는다. 포트와 힙 크기는 `datamatch.properties`와 `start.bat`의 변수로 바꿀 수 있다(TD-21).
 
-SafeDB 설정 파일을 어디서 찾는지(classpath 또는 작업 폴더 상대경로)는 pgweb-boot 코드와 설정만으로는 확정할 수 없어, 개발 첫 Task에서 실제로 확인한다(TA-01). 결과에 따라 `start.bat`의 작업 폴더와 클래스패스를 조정한다.
+2026-11-09 사전 확인에서 `SafeDBAccess.properties`는 classpath에서 찾는다는 것을 확인했다(작업 폴더에만 두면 "Could not find resource"로 실패). `SafeDBMap_config.xml`·`inilog4j.properties`의 위치는 SafeDB 서버 연결 이후 단계라 외부망 개발 PC에서는 확인하지 못했고, 사내망 PC에서 확인한다(TA-01). 그때까지는 위와 같이 작업 폴더와 classpath를 모두 `config`로 둔다.
 
 ### 3.3 비교 실행 흐름
 
@@ -175,13 +187,14 @@ sequenceDiagram
 ```text
 backend/
   build.gradle  settings.gradle  gradlew  gradle/wrapper/
-  libs/safedb-lib/                  SafeDB jar 9개 (Git 포함)
+  libs/safedb-lib/                  SafeDB jar 9개 (Git 제외, README.txt의 안내대로 복사)
   config/datamatch.properties.example
   scripts/start.bat
   src/main/java/kr/kicc/datamatch/
     DataMatchApplication.java
     config/      환경 설정(@ConfigurationProperties), DataSourceRegistry, LocalOnlyFilter
     web/         Controller, dto, GlobalExceptionHandler, ApiError
+    error/       ErrorCode, DataMatchException (모든 계층이 함께 쓰는 오류 코드·예외)
     metadata/    MetadataService, MetadataRepository (테이블 검색, 컬럼·PK 조회)
     compare/     CompareService, ChunkProcessor, RowRepository, SqlBuilder, ValueConverter,
                  CompareEngine, JsonFlattener, PairsParser, 결과 모델
@@ -199,11 +212,11 @@ frontend/
   src/utils/      pairsParser.ts
 ```
 
-패키지명은 pgweb-boot의 `kr.kicc`를 따른 `kr.kicc.datamatch`로 한다(실행 계획 D-05). 레이어 의존 방향은 `web → service → repository / safedb / excel`이며 역방향 참조는 하지 않는다. 컨트롤러에는 업무 로직을 두지 않고, SafeDB는 `Decryptor` 인터페이스 뒤에 두어 테스트에서 가짜 구현으로 바꿀 수 있게 한다.
+패키지명은 pgweb-boot의 `kr.kicc`를 따른 `kr.kicc.datamatch`로 한다(실행 계획 D-05). 레이어 의존 방향은 `web → service → repository / safedb / excel`이며 역방향 참조는 하지 않는다. 오류 코드와 업무 예외는 모든 계층이 쓰므로 `web`이 아닌 `error` 패키지에 둔다(BE-01). 컨트롤러에는 업무 로직을 두지 않고, SafeDB는 `Decryptor` 인터페이스 뒤에 두어 테스트에서 가짜 구현으로 바꿀 수 있게 한다.
 
 ### 4.2 Git 관리 대상
 
-현재 `.gitignore`는 Node 템플릿이어서 Java·SafeDB 항목이 없다. SETUP Task에서 다음을 추가한다. `backend/build/`, `.gradle/`, `backend/src/main/resources/static/`(프론트 빌드 산출물), `backend/config/datamatch.properties`, `backend/config/SafeDBAccess.properties`, `backend/config/SafeDBMap_config.xml`, `backend/logs/`. `backend/libs/**/*.jar`와 `gradle-wrapper.jar`는 Git에 포함한다. 저장소의 `dist`, `logs`, `node_modules/`, `.env*` 제외 규칙은 그대로 둔다.
+현재 `.gitignore`는 Node 템플릿이어서 Java·SafeDB 항목이 없다. SETUP Task에서 다음을 추가한다. `backend/build/`, `.gradle/`, `backend/src/main/resources/static/`(프론트 빌드 산출물), `backend/config/datamatch.properties`, `backend/config/SafeDBAccess.properties`, `backend/config/SafeDBMap_config.xml`, `backend/logs/`. `gradle-wrapper.jar`는 Git에 포함한다. SafeDB jar(`backend/libs/safedb-lib/*.jar`)는 상용 라이브러리라 공개 저장소에 올리지 않도록 Git에서 제외하고, 같은 폴더의 `README.txt`로 복사할 파일을 안내한다(TD-04). 저장소의 `dist`, `logs`, `node_modules/`, `.env*` 제외 규칙은 그대로 둔다.
 
 ### 4.3 빌드
 
@@ -225,7 +238,7 @@ PRD의 FR별 처리 구조를 정리한다. 요구사항 자체는 PRD를 따른
 
 **FR-06 비교 실행·진행 표시.** 비교 시작은 작업을 만들고 즉시 `jobId`와 전체 쌍 수를 반환한다. 이후 7장의 작업 구조로 실행하며, 진행률과 중지는 7장에서 설명한다. DB 연결 실패, 조회 타임아웃, 그 밖의 DB 오류는 전체 비교 실패로 처리하고 부분 결과를 만들지 않는다(PA-17).
 
-**FR-07 복호화 및 JSON 필드 비교.** 복호화는 `SafeDbDecryptor`가 담당한다. pgweb-boot의 `SafeDBEncUtil`과 같이 `SimpleSafeDB.getInstance()`를 사용하고 `login()` 후 `decrypt(사용자ID, 정책테이블, 정책컬럼, bytes)`를 호출한다. 사용자ID `SAFEDB`, 정책 테이블 `SAFEDB.POLICY`, 정책 컬럼 `KDKEY`/`PANEN`은 상수로 두고 암호화 메서드는 가져오지 않는다(TD-10). 디코딩은 KDKEY는 `EUC-KR`, PANEN은 `UTF-8`로 하며(pgweb-boot는 KDKEY에 EUC-KR, PANEN에 기본 문자셋을 썼고 `-Dfile.encoding=UTF-8`로 실행했다), 한글 결과가 원본과 같은지는 개발 단계에서 검증한다(TA-07). SafeDB 클라이언트의 스레드 안전성이 확인되지 않았으므로 복호화는 워커 스레드 하나에서 순차 호출한다(TA-11).
+**FR-07 복호화 및 JSON 필드 비교.** 복호화는 `SafeDbDecryptor`가 담당한다. pgweb-boot의 `SafeDBEncUtil`과 같이 `SimpleSafeDB.getInstance()`를 사용하고 `login()` 후 `decrypt(사용자ID, 정책테이블, 정책컬럼, bytes)`를 호출한다. 사용자ID `SAFEDB`, 정책 테이블 `SAFEDB.POLICY`, 정책 컬럼 `KDKEY`/`PANEN`은 상수로 두고 암호화 메서드는 가져오지 않는다(TD-10). 디코딩은 KDKEY는 `EUC-KR`, PANEN은 `UTF-8`로 하며(pgweb-boot는 KDKEY에 EUC-KR, PANEN에 기본 문자셋을 썼고 `-Dfile.encoding=UTF-8`로 실행했다), 한글 결과가 원본과 같은지는 개발 단계에서 검증한다(TA-07). SafeDB 클라이언트의 스레드 안전성이 확인되지 않았으므로 복호화는 워커 스레드 하나에서 순차 호출한다(TA-11). SafeDB 서버에 연결되지 않으면 `login()`은 설정된 데몬마다 연결을 시도하다가 약 110초 뒤 실패한다(2026-11-09 외부망 개발 PC에서 확인). 그래서 로그인은 비교 작업마다 첫 복호화 때 한 번만 시도하고, 실패하면 그 작업의 나머지 복호화 대상은 다시 시도하지 않고 즉시 복호화 오류(`DECRYPT_FAILED`)로 처리한 뒤 비교를 계속한다. 다음 비교 작업에서 다시 로그인한다.
 
 복호화 결과의 비교 규칙은 다음과 같다(TD-11).
 
@@ -312,7 +325,7 @@ PRD 6.1의 "DB에서 읽은 값을 문자열로 변환한 값 기준"을 타입�
 
 ### 7.3 중지 (TD-14)
 
-`POST /api/compare/{jobId}/cancel`은 작업의 취소 플래그를 세우고 상태를 `CANCELLING`으로 바꾼 뒤, 워커가 실행 중인 `Statement`가 있으면 `Statement.cancel()`을 호출해 Oracle 조회를 중단시킨다. 워커는 청크 시작 전과 복호화 행마다 플래그를 확인하고, 플래그가 서 있으면 지금까지의 부분 결과를 버리고 `CANCELLED`로 종료한다(PA-18). 스레드 인터럽트는 SafeDB 소켓 통신 중에 상태가 어긋날 위험이 있어 사용하지 않는다. SafeDB 복호화 호출 하나는 중간에 끊을 수 없으므로 중지는 현재 호출이 끝난 뒤 반영된다. 프론트는 `CANCELLED` 상태를 폴링으로 확인하면 모달을 닫고 입력값을 유지한 채 SC-01로 돌아가 안내를 표시한다(SA-07).
+`POST /api/compare/{jobId}/cancel`은 작업의 취소 플래그를 세우고 상태를 `CANCELLING`으로 바꾼 뒤, 워커가 실행 중인 `Statement`가 있으면 `Statement.cancel()`을 호출해 Oracle 조회를 중단시킨다. 워커는 청크 시작 전과 복호화 행마다 플래그를 확인하고, 플래그가 서 있으면 지금까지의 부분 결과를 버리고 `CANCELLED`로 종료한다(PA-18). 스레드 인터럽트는 SafeDB 소켓 통신 중에 상태가 어긋날 위험이 있어 사용하지 않는다. SafeDB 복호화 호출 하나는 중간에 끊을 수 없으므로 중지는 현재 호출이 끝난 뒤 반영된다. 서버에 연결되지 않을 때의 로그인 대기(약 110초) 중에도 중지는 대기가 끝난 뒤 반영된다. 프론트는 `CANCELLED` 상태를 폴링으로 확인하면 모달을 닫고 입력값을 유지한 채 SC-01로 돌아가 안내를 표시한다(SA-07).
 
 ### 7.4 작업 결과 관리
 
@@ -359,6 +372,19 @@ PRD 6.1의 "DB에서 읽은 값을 문자열로 변환한 값 기준"을 타입�
 ```
 
 모든 오류 응답은 `{code, message, details}` 형식이다. `INVALID_INPUT`의 `details`에는 오류 줄 목록(`line`, `reason`)이 들어가고, `PAIR_LIMIT_EXCEEDED`는 현재 건수를 포함한다. `message`는 로그와 개발 확인용 영문이며 화면 문구는 프론트가 화면 정의서에 따라 코드로 매핑한다. 응답에는 스택 트레이스, SQL, 접속 정보, 평문 값을 포함하지 않는다. 요청 바디는 `Content-Type: application/json`만 허용한다.
+오류 코드별 HTTP 상태는 다음과 같다(BE-01에서 확정, 실행 계획 PL-04). `FORBIDDEN_REQUEST`, `UNSUPPORTED_MEDIA_TYPE`은 로컬 보안 필터(9.3절)가 쓴다.
+
+| HTTP 상태 | 오류 코드 |
+| --------- | --------- |
+| 400 | `INVALID_INPUT`, `ENV_NOT_CONFIGURED`, `TABLE_NOT_SUPPORTED` |
+| 403 | `FORBIDDEN_REQUEST` |
+| 404 | `JOB_NOT_FOUND`, `PAIR_NOT_FOUND` |
+| 409 | `JOB_RUNNING`, `JOB_NOT_COMPLETED` |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` |
+| 500 | `EXCEL_FAILED`, `INTERNAL_ERROR` |
+| 502 | `DB_QUERY_FAILED` |
+| 503 | `DB_CONNECTION_FAILED` |
+| 504 | `QUERY_TIMEOUT` |
 
 ## 9. 보안 및 예외 처리
 
@@ -433,16 +459,17 @@ MVP 요구사항 FR-01~FR-09는 모두 설계에 반영되었다. FR-10, FR-11, 
 
 | ID    | 구분 | 내용                                                                                                                                                                                      |
 | ----- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| TA-01 | 미결 | SafeDB 설정 파일 탐색 방식 검증. `SafeDBAccess.properties`는 classpath, `SafeDBMap_config.xml`·`inilog4j.properties`는 작업 폴더 상대경로(`./`)로 보이나 코드로 확정하지 못했다. 분리형 zip에서 동작하는지 첫 SETUP Task에서 확인하고 `start.bat`을 조정한다 |
-| TA-02 | 미결 | JDK 11에서 SafeDB jar 9개의 동작과 개발·테스트·운영 환경별 복호화(한글 포함)를 실제로 검증한다. 필요한 최소 jar 집합도 이때 확인하며(`xercesImpl`, `xml-apis` 필요 여부 등), JDK 17/Boot 3 전환은 이 검증 이후에만 검토한다 (PA-14, R-05) |
+| TA-01 | 미결 | SafeDB 설정 파일 탐색 방식. `SafeDBAccess.properties`는 classpath에서 찾는 것을 확인했다(2026-11-09, 작업 폴더에만 두면 실패). `SafeDBMap_config.xml`·`inilog4j.properties`(작업 폴더 상대경로 `./`로 보임)는 서버 연결 이후 단계라 외부망 개발 PC에서 확인하지 못했고, 사내망 PC에서 확인해 `start.bat`을 최종 조정한다. SETUP-04(2026-11-10)에서 압축을 푼 배포 구조로 재현했다: 작업 폴더와 classpath(`.`)를 `config`로 두는 `start.bat` 규칙에서는 설정을 찾아 서버 연결 단계까지 진행했고, `config`를 classpath에서 빼면 같은 오류로 실패했다 |
+| TA-02 | 미결 | 2026-11-09 외부망 개발 PC에서 JDK 11로 SafeDB jar 9개의 로딩과 암호 모듈 초기화는 정상이었고 서버 연결은 불가(연결 시간 초과)했다. 사내망 PC에서 JDK 11에서 SafeDB jar 9개의 동작과 개발·테스트·운영 환경별 복호화(한글 포함)를 실제로 검증한다. 필요한 최소 jar 집합도 이때 확인하며(`xercesImpl`, `xml-apis` 필요 여부 등), JDK 17/Boot 3 전환은 이 검증 이후에만 검토한다 (PA-14, R-05) |
 | TA-03 | 미결 | 대상 Oracle 버전을 확인하고 `ojdbc8`과의 호환을 검증한다. pgweb-boot 저장소에 구버전 `ojdbc14.jar`가 있어 구버전 DB 가능성이 있으며, 그 경우 `ROWNUM` 기반 쿼리 등은 그대로 사용 가능하나 드라이버를 재검토한다 |
 | TA-04 | 해결 | 단일 PK 컬럼 타입 제한(문자형과 NUMBER만 지원)은 PRD PA-19로 확정했다. NUMBER PK에 숫자가 아닌 입력이 있으면 입력 오류 줄로 처리한다 |
 | TA-05 | 가정 | 연결 실패·타임아웃 외의 DB 오류(권한 부족, 테이블 없음 등)도 같은 방식의 전체 비교 실패(`DB_QUERY_FAILED`)로 처리한다 |
 | TA-06 | 가정 | 복호화 결과가 JSON 객체가 아니면(배열, 숫자, 빈 문자열 등) 복호화 오류(`JSON_NOT_OBJECT`, `JSON_INVALID`)로 처리한다 |
 | TA-07 | 가정 | 복호화 문자셋은 pgweb-boot와 같이 KDKEY는 EUC-KR, PANEN은 UTF-8(`-Dfile.encoding=UTF-8`)이다. 한글이 포함된 실제 데이터로 원본과 일치하는지 검증한다 |
 | TA-08 | 가정 | 특수 타입(INTERVAL, XMLTYPE, 객체 타입 등)은 `getString`으로 읽고, 읽을 수 없으면 전체 조회 실패로 처리한다. 실제로 선택되는 일이 드물어 구현 단계에서 필요할 때 보완한다 |
-| TA-09 | 가정 | 청크 100쌍, 힙 512MB, 포트 18080, 로그 7일 보관은 초기값이며 실측(대용량 CLOB 포함) 후 조정한다. 결과를 마지막 접근 후 일정 시간이 지나면 폐기하는 정책은 화면 동작 정의가 필요해 넣지 않았다 |
+| TA-09 | 가정 | 청크 100쌍, 힙 512MB, 포트 18080, 로그 7일 보관은 초기값이며 실측(대용량 CLOB 포함) 후 조정한다. 결과를 마지막 접근 후 일정 시간이 지나면 폐기하는 정책은 화면 동작 정의가 필요해 넣지 않았다. 2026-11-10 INT-03에서 배포 zip(`-Xmx512m`)과 로컬 Oracle 합성 데이터로 CLOB 2개를 포함한 7개 컬럼을 비교했다. 50쌍은 3.3초(첫 연결 포함), 500쌍은 1.9초, 1,000쌍은 2.1초였고, 엑셀 생성 1.4~1.8초를 포함한 최대 힙 사용량은 270MB였으며 OOM은 없었다. 이 결과로는 초기값을 바꿀 근거가 없어 유지한다. 실제 환경(SafeDB 복호화 포함)의 최종 판단은 INT-04 M-05에서 한다 |
 | TA-10 | 미결 | NFR-01(50쌍 10초, 500쌍 60초)을 실제 환경에서 측정한다. SafeDB 복호화가 순차 호출이므로 병목이 되면 병렬화를 SafeDB 스레드 안전성 확인 후 검토한다(TA-11) |
 | TA-11 | 미결 | `SimpleSafeDB`의 스레드 안전성이 확인되지 않아 복호화를 순차로 호출한다 |
 | TA-12 | 해결 | 서버와 통신할 수 없을 때의 안내 문구는 화면 정의서 WA-10으로 확정했다. 프론트는 폴링·API 호출이 실패하면 이 문구를 표시하고 입력값을 유지한다 |
 | TA-13 | 미결 | 시스템 스키마(SYS 등)의 테이블도 검색 결과에 포함된다(PA-02의 "접속 계정이 조회할 수 있는 전체"). 사용 중 불편하면 제외 규칙을 PRD 변경으로 제안한다 |
+| TA-14 | 미결 | SafeDB 서버에 연결되지 않으면 `login()`이 약 110초 동안 대기한다. `SafeDBAccess.properties`의 연결 시간 초과 관련 설정으로 대기를 줄일 수 있는지 SafeDB 담당자와 확인한다. 설정 파일은 SafeDB 담당 소관이라 DataMatch가 임의로 바꾸지 않는다 |

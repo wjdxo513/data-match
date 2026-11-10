@@ -150,3 +150,19 @@ vite.config.ts.timestamp-*
 
 # Playwright MCP 출력(스냅샷·콘솔 로그)
 .playwright-mcp/
+
+# DataMatch 백엔드 (기술 설계서 4.2)
+.gradle/
+backend/build/
+backend/logs/
+backend/src/main/resources/static/
+# 민감 설정: 접속 정보와 SafeDB 설정은 Git에 넣지 않는다(TD-06, NFR-05)
+backend/config/datamatch.properties
+backend/config/SafeDBAccess.properties
+backend/config/SafeDBMap_config.xml
+backend/config/inilog4j.properties
+# SafeDB 상용 라이브러리 jar: 공개 저장소에 올리지 않고 사내에서 별도로 복사한다(TD-04, libs/safedb-lib/README.txt)
+backend/libs/safedb-lib/*.jar
+# IDE
+.idea/
+*.iml

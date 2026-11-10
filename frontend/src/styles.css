@@ -1,0 +1,564 @@
+/* DataMatch 화면 스타일. docs/prototype/index.html 의 CSS를 기반으로 한다(기술 설계서 2장). */
+:root {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --line: #d9dde3;
+  --text: #1f2933;
+  --sub: #5f6b7a;
+  --primary: #2459d6;
+  --primary-bg: #e8effd;
+
+  /* 판정 색상(화면 정의서 4장, 기술 설계서 TD-17) */
+  --match: #2e7d32;
+  --match-bg: #e8f5e9;
+  --mismatch: #c62828;
+  --mismatch-bg: #fdecea;
+  --missing: #8a5a00;
+  --missing-bg: #fff3d6;
+  --null-text: #8a94a3;
+
+  /* 운영 환경 경고(NFR-07) */
+  --prod-warning: #b71c1c;
+  --prod-warning-ring: #f6c8c8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    14px/1.5 'Malgun Gothic',
+    'Apple SD Gothic Neo',
+    sans-serif;
+}
+
+/* 환경 바: 스크롤해도 상단에 고정(화면 정의서 1장) */
+.envbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 10px 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.envbar .brand {
+  margin-right: 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.env {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.env label {
+  color: var(--sub);
+  font-weight: 600;
+}
+
+.env.is-prod select {
+  border-color: var(--prod-warning);
+  box-shadow: 0 0 0 2px var(--prod-warning-ring);
+}
+
+.badge-prod {
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--prod-warning);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+select,
+input[type='text'],
+textarea {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+}
+
+select {
+  min-width: 120px;
+}
+
+textarea {
+  width: 100%;
+  height: 130px;
+  resize: none;
+  font-family: Consolas, 'Malgun Gothic', monospace;
+}
+
+textarea.err {
+  border-color: var(--mismatch);
+}
+
+main {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px 24px 48px;
+}
+
+section.card {
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.row .lbl {
+  width: 72px;
+  color: var(--sub);
+  font-weight: 600;
+}
+
+.hint {
+  margin-top: 4px;
+  color: var(--sub);
+  font-size: 12px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: #f0f2f5;
+  color: var(--sub);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #eceff3;
+  color: var(--sub);
+  font-size: 11px;
+}
+
+.btn {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.btn.primary {
+  padding: 9px 22px;
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.btn.danger {
+  border-color: var(--mismatch);
+  color: var(--mismatch);
+}
+
+.errbox {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid #f3b9b4;
+  border-radius: 6px;
+  background: var(--mismatch-bg);
+  color: var(--mismatch);
+  font-size: 13px;
+}
+
+.errbox ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+/* 판정 배지와 강조(화면 정의서 SC03-06) */
+.pill {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pill.match {
+  background: var(--match-bg);
+  color: var(--match);
+}
+
+.pill.mismatch {
+  background: var(--mismatch-bg);
+  color: var(--mismatch);
+}
+
+.pill.missing {
+  background: var(--missing-bg);
+  color: var(--missing);
+}
+
+tr.row-mismatch td {
+  background: var(--mismatch-bg);
+  color: var(--mismatch);
+  font-weight: 600;
+}
+
+.null-value {
+  color: var(--null-text);
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* 진행 모달(SC-02) */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 28, 40, 0.45);
+}
+
+.modal {
+  width: 460px;
+  padding: 24px 26px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+
+.bar {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #e6e9ee;
+}
+
+.bar > i {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+}
+
+/* 이하 docs/prototype/index.html 의 화면 구성 스타일 */
+h2 .sc {
+  margin-left: 8px;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.env-error {
+  color: var(--mismatch);
+  font-size: 13px;
+}
+
+.pk {
+  color: var(--sub);
+}
+
+.pk b {
+  color: var(--text);
+}
+
+.search-box {
+  position: relative;
+}
+
+.search-box input {
+  width: 340px;
+}
+
+.candidates {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 4;
+  width: 460px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin-top: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.cand,
+.cand-note {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cand {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.cand:hover {
+  background: var(--primary-bg);
+}
+
+.cand.disabled {
+  color: var(--sub);
+  cursor: not-allowed;
+}
+
+.cand-reason {
+  color: var(--mismatch);
+  font-size: 12px;
+}
+
+.cand-note {
+  color: var(--sub);
+  font-size: 13px;
+}
+
+.cand-note.err {
+  color: var(--mismatch);
+}
+
+.cols td.chk,
+.cols th.chk {
+  width: 44px;
+}
+
+.split {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  margin-top: 16px;
+}
+
+.split .left {
+  flex: 1;
+}
+
+.split .right {
+  width: 300px;
+}
+
+.stat {
+  margin-bottom: 4px;
+  color: var(--sub);
+}
+
+.stat.over {
+  color: var(--mismatch);
+  font-weight: 700;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.notice {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f7f8fa;
+}
+
+.resulthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.cond {
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.cond .a,
+.cond .b {
+  margin-right: 6px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.cond .a {
+  background: var(--primary-bg);
+  color: var(--primary);
+}
+
+.cond .b {
+  background: var(--mismatch-bg);
+  color: var(--prod-warning);
+}
+
+.summary {
+  margin-bottom: 12px;
+  color: var(--sub);
+}
+
+.summary b {
+  color: var(--text);
+}
+
+.result-split {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.list {
+  width: 360px;
+  max-height: 640px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+}
+
+.list .item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.list .item.sel {
+  background: var(--primary-bg);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.list .no {
+  min-width: 20px;
+  color: var(--sub);
+}
+
+.list .pair {
+  flex: 1;
+  font-family: Consolas, monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.detail {
+  flex: 1;
+  min-width: 0;
+}
+
+.detail h3 {
+  margin: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #f7f8fa;
+  font-size: 14px;
+}
+
+.detail td.val {
+  font-family: Consolas, 'Malgun Gothic', monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+}
+
+.missing-note {
+  margin: 14px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--missing-bg);
+  color: var(--missing);
+  font-weight: 600;
+}
+
+.st {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.st.match {
+  color: var(--match);
+}
+
+.st.mismatch {
+  color: var(--mismatch);
+}
+
+.btn.link,
+button.link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.modal h4 {
+  margin: 0 0 14px;
+  font-size: 16px;
+}
+
+.modal .meta {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0 18px;
+  color: var(--sub);
+}
+
+.modal .meta b {
+  color: var(--text);
+}
+
+.modal .foot {
+  margin-top: 12px;
+  text-align: right;
+}
