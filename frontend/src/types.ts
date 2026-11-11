@@ -8,14 +8,10 @@ export interface Environment {
   production: boolean;
 }
 
-export type TableUnsupportedReason = 'NO_PK' | 'COMPOSITE_PK' | 'UNSUPPORTED_PK_TYPE';
-
+/** 테이블 검색 후보. PRD v1.4부터 모든 테이블을 선택할 수 있다(PA-10). */
 export interface TableCandidate {
   owner: string;
   name: string;
-  selectable: boolean;
-  reason: TableUnsupportedReason | null;
-  pkColumn: string | null;
 }
 
 export interface TableSearchResponse {
@@ -28,10 +24,13 @@ export interface ColumnInfo {
   type: string;
   pk: boolean;
   clob: boolean;
+  /** 비교 키로 고를 수 있는지(문자형·NUMBER, PA-19). */
+  keyable: boolean;
 }
 
 export interface ColumnsResponse {
-  pkColumn: string;
+  /** 기본 비교 키(단일 PK이고 keyable일 때). 없으면 null. */
+  keyColumn: string | null;
   columns: ColumnInfo[];
 }
 
@@ -45,6 +44,7 @@ export interface CompareRequest {
   envB: string;
   owner: string;
   table: string;
+  keyColumn: string;
   columns: CompareColumnRequest[];
   pairsText: string;
 }
@@ -71,7 +71,13 @@ export interface CancelResponse {
   status: JobStatus;
 }
 
-export type PairStatus = 'MATCH' | 'MISMATCH' | 'MISSING';
+export type PairStatus = 'MATCH' | 'MISMATCH' | 'MISSING' | 'DUPLICATE';
+
+/** 키 중복 짝의 양쪽 조회 건수(PRD v1.4). */
+export interface DuplicateCount {
+  a: number;
+  b: number;
+}
 export type MissingSide = 'A' | 'B' | 'BOTH';
 export type RowStatus = 'MATCH' | 'MISMATCH' | 'DECRYPT_ERROR';
 export type DecryptErrorCause = 'DECRYPT_FAILED' | 'JSON_INVALID' | 'JSON_NOT_OBJECT';
@@ -81,6 +87,7 @@ export interface CompareCondition {
   envB: string;
   owner: string;
   table: string;
+  keyColumn: string;
   columns: { name: string; decrypt?: DecryptPolicy }[];
   comparedAt: string;
 }
@@ -92,11 +99,12 @@ export interface SummaryItem {
   status: PairStatus;
   mismatchCount: number;
   missing: MissingSide | null;
+  duplicate: DuplicateCount | null;
 }
 
 export interface CompareSummary {
   condition: CompareCondition;
-  counts: { total: number; match: number; mismatch: number; missing: number };
+  counts: { total: number; match: number; mismatch: number; missing: number; duplicate: number };
   items: SummaryItem[];
 }
 
@@ -115,6 +123,7 @@ export interface PairDetail {
   b: string;
   status: PairStatus;
   missing: MissingSide | null;
+  duplicate: DuplicateCount | null;
   rows: DetailRow[];
 }
 
@@ -129,7 +138,6 @@ export interface PairLineError {
 export type ErrorCode =
   | 'INVALID_INPUT'
   | 'ENV_NOT_CONFIGURED'
-  | 'TABLE_NOT_SUPPORTED'
   | 'FORBIDDEN_REQUEST'
   | 'JOB_NOT_FOUND'
   | 'PAIR_NOT_FOUND'

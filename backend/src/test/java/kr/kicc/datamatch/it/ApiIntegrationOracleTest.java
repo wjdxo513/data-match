@@ -92,9 +92,19 @@ class ApiIntegrationOracleTest {
 
     // ---- 도우미 ----
 
+    /** 테이블별 기본 비교 키(단일 PK). 복합 PK 테이블은 bodyWithKey로 직접 지정한다. */
+    private static final Map<String, String> DEFAULT_KEYS = Map.of("DM_IT_TRX_STR", "TRX_NO", "DM_IT_TRX_NUM", "TRX_ID",
+            "DM_IT_TYPES", "ID", "DM_IT_SLOW", "ID", "DM_IT_NO_B_GRANT", "ID");
+
     private String body(String envA, String envB, String table, String columnsJson, String pairsText) {
-        return "{\"envA\":\"" + envA + "\",\"envB\":\"" + envB + "\",\"owner\":\"" + OWNER + "\",\"table\":\"" + table
-                + "\",\"columns\":" + columnsJson + ",\"pairsText\":" + quote(pairsText) + "}";
+        return bodyWithKey(envA, envB, table, DEFAULT_KEYS.get(table), columnsJson, pairsText);
+    }
+
+    /** {@code keyColumn}이 null이면 요청에서 뺀다. */
+    private String bodyWithKey(String envA, String envB, String table, String keyColumn, String columnsJson, String pairsText) {
+        return "{\"envA\":\"" + envA + "\",\"envB\":\"" + envB + "\",\"owner\":\"" + OWNER + "\",\"table\":\"" + table + "\","
+                + (keyColumn == null ? "" : "\"keyColumn\":\"" + keyColumn + "\",")
+                + "\"columns\":" + columnsJson + ",\"pairsText\":" + quote(pairsText) + "}";
     }
 
     private static String quote(String s) {
@@ -167,15 +177,18 @@ class ApiIntegrationOracleTest {
     }
 
     @Test
-    void metadataApisJudgePkTypesAndSearchLiterallyWithTruncation() throws Exception {
-        for (String[] t : new String[][] {{"DM_IT_TRX_STR", "true", null}, {"DM_IT_TRX_NUM", "true", null},
-                {"DM_IT_COMPOSITE", "false", "COMPOSITE_PK"}, {"DM_IT_NOPK", "false", "NO_PK"}, {"DM_IT_DATEPK", "false", "UNSUPPORTED_PK_TYPE"}}) {
+    void metadataApisReturnAllTablesDefaultKeysAndSearchLiterallyWithTruncation() throws Exception {
+        // PRD v1.4: 모든 테이블이 후보이고, 기본 비교 키는 단일 문자형·NUMBER PK일 때만 있다.
+        for (String[] t : new String[][] {{"DM_IT_TRX_STR", "TRX_NO"}, {"DM_IT_TRX_NUM", "TRX_ID"},
+                {"DM_IT_COMPOSITE", null}, {"DM_IT_NOPK", null}, {"DM_IT_DATEPK", null}}) {
             String res = json("/api/tables?env=test&q=" + OWNER + "." + t[0]);
             List<Map<String, Object>> items = JsonPath.read(res, "$.items[?(@.name == '" + t[0] + "')]");
             assertThat(items).as(t[0]).hasSize(1);
-            assertThat(items.get(0).get("selectable")).as(t[0]).isEqualTo(Boolean.valueOf(t[1]));
-            assertThat(items.get(0).get("reason")).as(t[0]).isEqualTo(t[2]);
+            String cols = json("/api/tables/columns?env=test&owner=" + OWNER + "&table=" + t[0]);
+            assertThat((Object) JsonPath.read(cols, "$.keyColumn")).as(t[0]).isEqualTo(t[1]);
         }
+        String comp = json("/api/tables/columns?env=test&owner=" + OWNER + "&table=DM_IT_COMPOSITE");
+        assertThat((List<String>) JsonPath.read(comp, "$.columns[?(@.pk == true)].name")).containsExactly("K1", "K2");
         String many = json("/api/tables?env=test&q=DM_IT_SEARCH");
         assertThat((List<?>) JsonPath.read(many, "$.items")).hasSize(30);
         assertThat((Boolean) JsonPath.read(many, "$.truncated")).isTrue();
@@ -294,6 +307,33 @@ class ApiIntegrationOracleTest {
         assertThat((String) JsonPath.read(grant, "$.status")).isEqualTo("FAILED");
         assertThat((String) JsonPath.read(grant, "$.errorCode")).isEqualTo("DB_QUERY_FAILED");
         assertThat((String) JsonPath.read(grant, "$.failedSide")).isEqualTo("B");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void compositePkTableIsComparedByChosenKeyWithDuplicateDetection() throws Exception {
+        // PRD v1.4 PA-10: 복합 PK 테이블을 첫 번째 PK 컬럼(K1)으로 비교한다. C1은 유일, C2는 양쪽 2건(키 중복).
+        String jobId = start(bodyWithKey("test", "prod", "DM_IT_COMPOSITE", "K1", "[{\"name\":\"VAL\"}]", "C1,C1\nC2,C2\nC9,C1"));
+        awaitEnd(jobId, new java.util.ArrayList<>());
+        String summary = json("/api/compare/" + jobId + "/summary");
+        assertThat((List<String>) JsonPath.read(summary, "$.items[*].status")).containsExactly("MATCH", "DUPLICATE", "MISSING");
+        assertThat((Integer) JsonPath.read(summary, "$.items[1].duplicate.a")).isEqualTo(2);
+        assertThat((Integer) JsonPath.read(summary, "$.items[1].duplicate.b")).isEqualTo(2);
+        assertThat((Integer) JsonPath.read(summary, "$.counts.duplicate")).isEqualTo(1);
+        assertThat((String) JsonPath.read(summary, "$.condition.keyColumn")).isEqualTo("K1");
+        assertThat((List<Object>) JsonPath.read(json("/api/compare/" + jobId + "/pairs/2"), "$.rows")).isEmpty();
+
+        for (String key : new String[] {null, "D", "NOPE"}) {
+            String table = "D".equals(key) ? "DM_IT_DATEPK" : "DM_IT_COMPOSITE";
+            mvc.perform(post("/api/compare").header("Host", "localhost").contentType(MediaType.APPLICATION_JSON)
+                            .content(bodyWithKey("test", "prod", table, key, "[{\"name\":\"VAL\"}]", "C1,C1")))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        }
+        // PK 없음 테이블도 문자형 컬럼을 비교 키로 비교할 수 있다.
+        String nopk = start(bodyWithKey("test", "prod", "DM_IT_NOPK", "ID", "[{\"name\":\"VAL\"}]", "N1,N1"));
+        awaitEnd(nopk, new java.util.ArrayList<>());
+        assertThat((List<String>) JsonPath.read(json("/api/compare/" + nopk + "/summary"), "$.items[*].status")).containsExactly("MATCH");
     }
 
     @AfterAll

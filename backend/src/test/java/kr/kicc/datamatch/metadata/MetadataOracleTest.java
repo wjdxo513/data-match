@@ -12,7 +12,6 @@ import kr.kicc.datamatch.error.DataMatchException;
 import kr.kicc.datamatch.error.ErrorCode;
 import kr.kicc.datamatch.it.OracleIntegrationTest;
 import kr.kicc.datamatch.it.OracleTestDatabase;
-import kr.kicc.datamatch.metadata.PkSupport.UnsupportedReason;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,8 +53,7 @@ class MetadataOracleTest {
         TableSearchResult result = service.searchTables("test", "dm_it_search");
         assertThat(result.isTruncated()).isTrue();
         assertThat(result.getItems()).hasSize(30)
-                .allSatisfy(c -> assertThat(c.getName()).startsWith("DM_IT_SEARCH_"))
-                .allSatisfy(c -> assertThat(c.isSelectable()).isTrue());
+                .allSatisfy(c -> assertThat(c.getName()).startsWith("DM_IT_SEARCH_"));
         assertThat(result.getItems().get(0).getName()).isEqualTo("DM_IT_SEARCH_01");
     }
 
@@ -67,20 +65,26 @@ class MetadataOracleTest {
     }
 
     @Test
-    void pkTypesAreJudged() {
-        assertThat(only("test", "DM_IT_TRX_STR")).isEqualTo(new TableCandidate(OWNER, "DM_IT_TRX_STR", true, null, "TRX_NO"));
-        assertThat(only("test", "DM_IT_TRX_NUM")).isEqualTo(new TableCandidate(OWNER, "DM_IT_TRX_NUM", true, null, "TRX_ID"));
-        assertThat(only("test", "DM_IT_COMPOSITE").getReason()).isEqualTo(UnsupportedReason.COMPOSITE_PK);
-        assertThat(only("test", "DM_IT_NOPK").getReason()).isEqualTo(UnsupportedReason.NO_PK);
-        assertThat(only("test", "DM_IT_DATEPK").getReason()).isEqualTo(UnsupportedReason.UNSUPPORTED_PK_TYPE);
-        assertThatThrownBy(() -> service.describeTable("test", OWNER, "DM_IT_COMPOSITE"))
-                .satisfies(e -> assertThat(((DataMatchException) e).code()).isEqualTo(ErrorCode.TABLE_NOT_SUPPORTED));
+    void allPkKindsAreCandidatesAndDefaultKeysFollowPk() {
+        for (String table : new String[] {"DM_IT_TRX_STR", "DM_IT_TRX_NUM", "DM_IT_COMPOSITE", "DM_IT_NOPK", "DM_IT_DATEPK"}) {
+            assertThat(only("test", table)).isEqualTo(new TableCandidate(OWNER, table));
+        }
+        assertThat(service.describeTable("test", OWNER, "DM_IT_TRX_STR").defaultKeyColumn()).isEqualTo("TRX_NO");
+        assertThat(service.describeTable("test", OWNER, "DM_IT_TRX_NUM").defaultKeyColumn()).isEqualTo("TRX_ID");
+        TableMetadata comp = service.describeTable("test", OWNER, "DM_IT_COMPOSITE");
+        assertThat(comp.getPkColumns()).containsExactly("K1", "K2");
+        assertThat(comp.defaultKeyColumn()).isNull();
+        assertThat(service.describeTable("test", OWNER, "DM_IT_NOPK").getPkColumns()).isEmpty();
+        TableMetadata date = service.describeTable("test", OWNER, "DM_IT_DATEPK");
+        assertThat(date.getPkColumns()).containsExactly("D");
+        assertThat(date.defaultKeyColumn()).isNull();
+        assertThat(date.column("VAL").orElseThrow().isKeyable()).isTrue();
     }
 
     @Test
     void columnsAreReturnedInColumnOrderWithTypes() {
         TableMetadata types = service.describeTable("test", OWNER, "DM_IT_TYPES");
-        assertThat(types.getPkColumn()).isEqualTo("ID");
+        assertThat(types.defaultKeyColumn()).isEqualTo("ID");
         assertThat(types.getColumns()).extracting(ColumnMeta::getName).containsExactly(
                 "ID", "C_CHAR", "C_VARCHAR", "C_NCHAR", "C_NVARCHAR", "C_NUMBER", "C_NUMSCALE", "C_FLOAT", "C_BDOUBLE",
                 "C_DATE", "C_TS", "C_TSTZ", "C_TSLTZ", "C_CLOB", "C_NCLOB", "C_BLOB", "C_RAW", "C_INTERVAL");
@@ -91,7 +95,7 @@ class MetadataOracleTest {
         assertThat(types.column("C_TS").orElseThrow().displayType()).isEqualTo("TIMESTAMP(9)");
 
         TableMetadata num = service.describeTable("test", OWNER, "DM_IT_TRX_NUM");
-        assertThat(num.isNumericPk()).isTrue();
+        assertThat(num.column(num.defaultKeyColumn()).orElseThrow().isNumber()).isTrue();
         assertThat(num.column("TRX_ID").orElseThrow().displayType()).isEqualTo("NUMBER(15)");
     }
 

@@ -51,9 +51,9 @@ class RowRepositoryOracleTest {
         TableMetadata types = metadata.describeTable("test", OWNER, "DM_IT_TYPES");
         List<String> cols = List.of("C_CHAR", "C_VARCHAR", "C_NCHAR", "C_NVARCHAR", "C_NUMBER", "C_NUMSCALE", "C_FLOAT",
                 "C_BDOUBLE", "C_DATE", "C_TS", "C_TSTZ", "C_TSLTZ", "C_CLOB", "C_NCLOB", "C_BLOB", "C_RAW", "C_INTERVAL");
-        Map<String, Map<String, String>> rows = repository.fetchRows("test", SqlBuilder.build(types, cols),
+        Map<String, List<Map<String, String>>> rows = repository.fetchRows("test", SqlBuilder.build(types, "ID", cols),
                 List.of("T1", "T2", "T3", "T4"), new CancellationToken());
-        Map<String, String> t1 = rows.get("T1");
+        Map<String, String> t1 = rows.get("T1").get(0);
         System.out.println("[DB-03] DM_IT_TYPES T1 = " + t1);
         assertThat(t1).containsEntry("C_CHAR", "ab   ")
                 .containsEntry("C_VARCHAR", "Hello World")
@@ -73,9 +73,9 @@ class RowRepositoryOracleTest {
         // INTERVAL은 6.4의 "그 밖의 타입: getString"이며 ojdbc8은 '1 2:3:4.0' 형식을 돌려준다.
         assertThat(t1.get("C_INTERVAL")).isEqualTo("1 2:3:4.0");
         assertThat(t1.get("C_NCHAR")).isEqualTo("가나   ");
-        assertThat(rows.get("T2")).isEqualTo(t1);
-        assertThat(rows.get("T3")).containsOnlyKeys(cols.toArray(new String[0])).allSatisfy((k, v) -> assertThat(v).as(k).isNull());
-        Map<String, String> t4 = rows.get("T4");
+        assertThat(rows.get("T2").get(0)).isEqualTo(t1);
+        assertThat(rows.get("T3").get(0)).containsOnlyKeys(cols.toArray(new String[0])).allSatisfy((k, v) -> assertThat(v).as(k).isNull());
+        Map<String, String> t4 = rows.get("T4").get(0);
         for (String c : new String[] {"C_CHAR", "C_VARCHAR", "C_NUMBER", "C_DATE", "C_TS", "C_TSTZ", "C_CLOB", "C_BLOB", "C_RAW", "C_INTERVAL"}) {
             assertThat(t4.get(c)).as(c).isNotEqualTo(t1.get(c));
         }
@@ -84,16 +84,17 @@ class RowRepositoryOracleTest {
     @Test
     void bindsStringAndNumberPksAndOmitsMissingKeys() {
         TableMetadata str = metadata.describeTable("test", OWNER, "DM_IT_TRX_STR");
-        Map<String, Map<String, String>> s = repository.fetchRows("test", SqlBuilder.build(str, List.of("ORDER_NO", "AMOUNT")),
+        Map<String, List<Map<String, String>>> s = repository.fetchRows("test", SqlBuilder.build(str, "TRX_NO", List.of("ORDER_NO", "AMOUNT")),
                 List.of("A000001", "NOPE", "B000002"), new CancellationToken());
         assertThat(s).containsOnlyKeys("A000001", "B000002");
-        assertThat(s.get("A000001")).containsEntry("ORDER_NO", "ORD-1").containsEntry("AMOUNT", "100");
+        assertThat(s.get("A000001")).hasSize(1);
+        assertThat(s.get("A000001").get(0)).containsEntry("ORDER_NO", "ORD-1").containsEntry("AMOUNT", "100");
 
         TableMetadata num = metadata.describeTable("test", OWNER, "DM_IT_TRX_NUM");
-        Map<String, Map<String, String>> n = repository.fetchRows("test", SqlBuilder.build(num, List.of("ORDER_NO", "AMOUNT")),
+        Map<String, List<Map<String, String>>> n = repository.fetchRows("test", SqlBuilder.build(num, "TRX_ID", List.of("ORDER_NO", "AMOUNT")),
                 List.of("1", "2.0", "99999999"), new CancellationToken());
         assertThat(n).containsOnlyKeys("1", "2.0");
-        assertThat(n.get("1")).containsEntry("ORDER_NO", "ORD-1").containsEntry("AMOUNT", "1.5");
+        assertThat(n.get("1").get(0)).containsEntry("ORDER_NO", "ORD-1").containsEntry("AMOUNT", "1.5");
     }
 
     @Test
@@ -101,7 +102,7 @@ class RowRepositoryOracleTest {
         TableMetadata slow = metadata.describeTable("test", OWNER, "DM_IT_SLOW");
         OracleRowRepository shortTimeout = new OracleRowRepository(registry, 100, 3);
         long start = System.nanoTime();
-        assertThatThrownBy(() -> shortTimeout.fetchRows("test", SqlBuilder.build(slow, List.of("SLOW_COL")),
+        assertThatThrownBy(() -> shortTimeout.fetchRows("test", SqlBuilder.build(slow, "ID", List.of("SLOW_COL")),
                 List.of("S1", "S2", "S3", "S4", "S5"), new CancellationToken()))
                 .isInstanceOf(DataMatchException.class)
                 .satisfies(e -> assertThat(((DataMatchException) e).code()).isEqualTo(ErrorCode.QUERY_TIMEOUT));
@@ -116,7 +117,7 @@ class RowRepositoryOracleTest {
         CancellationToken token = new CancellationToken();
         CompletableFuture<Throwable> result = CompletableFuture.supplyAsync(() -> {
             try {
-                repository.fetchRows("test", SqlBuilder.build(slow, List.of("SLOW_COL")), List.of("S1", "S2", "S3", "S4", "S5"), token);
+                repository.fetchRows("test", SqlBuilder.build(slow, "ID", List.of("SLOW_COL")), List.of("S1", "S2", "S3", "S4", "S5"), token);
                 return null;
             } catch (Throwable t) {
                 return t;
@@ -130,5 +131,18 @@ class RowRepositoryOracleTest {
         System.out.println("[DB-03] cancel returned after " + ms + " ms: " + thrown);
         assertThat(thrown).isInstanceOf(QueryCancelledException.class);
         assertThat(ms).isLessThan(5_000);
+    }
+
+    @Test
+    void compositePkTableByFirstPkColumnReturnsAllRowsOfDuplicateKeys() {
+        TableMetadata comp = metadata.describeTable("test", OWNER, "DM_IT_COMPOSITE");
+        Map<String, List<Map<String, String>>> rows = repository.fetchRows("test", SqlBuilder.build(comp, "K1", List.of("K2", "VAL")),
+                List.of("C1", "C2", "C9"), new CancellationToken());
+        assertThat(rows).containsOnlyKeys("C1", "C2");
+        assertThat(rows.get("C1")).hasSize(1);
+        assertThat(rows.get("C2")).extracting(r -> r.get("VAL")).containsExactlyInAnyOrder("x2", "x3");
+        TableMetadata nopk = metadata.describeTable("test", OWNER, "DM_IT_NOPK");
+        assertThat(repository.fetchRows("test", SqlBuilder.build(nopk, "ID", List.of("VAL")), List.of("N1"), new CancellationToken())
+                .get("N1")).hasSize(1);
     }
 }

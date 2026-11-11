@@ -27,10 +27,10 @@ import org.junit.jupiter.api.Test;
 /** BE-05: 비교 요청 검증(환경, 메타데이터, 복호화 대상, 거래번호 입력)과 불변 사본. */
 class CompareTaskFactoryTest {
 
-    private static final TableMetadata STR = new TableMetadata("O", "T", "ID", "VARCHAR2", List.of(
+    private static final TableMetadata STR = new TableMetadata("O", "T", List.of("ID"), List.of(
             new ColumnMeta("ID", "VARCHAR2", 10, null, null, 10), new ColumnMeta("AMOUNT", "NUMBER", 22, null, null, 0),
             new ColumnMeta("APPR_MSG", "CLOB", 4000, null, null, 0)));
-    private static final TableMetadata NUM = new TableMetadata("O", "N", "ID", "NUMBER", List.of(
+    private static final TableMetadata NUM = new TableMetadata("O", "N", List.of("ID"), List.of(
             new ColumnMeta("ID", "NUMBER", 22, 15, 0, 0)));
 
     private MetadataService metadata;
@@ -54,7 +54,7 @@ class CompareTaskFactoryTest {
     @Test
     void createsImmutableTaskFromAEnvironmentMetadata() {
         List<ColumnSpec> cols = new ArrayList<>(List.of(ColumnSpec.plain("AMOUNT"), ColumnSpec.decrypted("APPR_MSG", DecryptPolicy.KDKEY)));
-        CompareTask task = factory.create("test", "prod", "O", "T", cols, "A1,B1\r\nA2\tB2");
+        CompareTask task = factory.create("test", "prod", "O", "T", "ID", cols, "A1,B1\r\nA2\tB2");
         verify(metadata).describeTable("test", "O", "T");
         cols.clear();
         cols.add(ColumnSpec.plain("ID"));
@@ -68,9 +68,9 @@ class CompareTaskFactoryTest {
 
     @Test
     void environmentsMustBeConfigured() {
-        assertThatThrownBy(() -> factory.create("dev", "prod", "O", "T", List.of(ColumnSpec.plain("ID")), "A,B"))
+        assertThatThrownBy(() -> factory.create("dev", "prod", "O", "T", "ID", List.of(ColumnSpec.plain("ID")), "A,B"))
                 .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.ENV_NOT_CONFIGURED));
-        assertThatThrownBy(() -> factory.create("test", null, "O", "T", List.of(ColumnSpec.plain("ID")), "A,B"))
+        assertThatThrownBy(() -> factory.create("test", null, "O", "T", "ID", List.of(ColumnSpec.plain("ID")), "A,B"))
                 .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.ENV_NOT_CONFIGURED));
     }
 
@@ -81,33 +81,41 @@ class CompareTaskFactoryTest {
                 List.of(ColumnSpec.plain("NOPE")),
                 List.of(ColumnSpec.plain("ID"), ColumnSpec.plain("ID")),
                 List.of(ColumnSpec.decrypted("AMOUNT", DecryptPolicy.KDKEY)))) {
-            assertThatThrownBy(() -> factory.create("test", "prod", "O", "T", cols, "A,B"))
+            assertThatThrownBy(() -> factory.create("test", "prod", "O", "T", "ID", cols, "A,B"))
                     .as(cols.toString())
                     .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
         }
-        assertThatThrownBy(() -> factory.create("test", "prod", "O", "T", null, "A,B"))
+        assertThatThrownBy(() -> factory.create("test", "prod", "O", "T", "ID", null, "A,B"))
                 .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
     }
 
     @Test
-    void unsupportedTableIsPropagated() {
-        when(metadata.describeTable(anyString(), anyString(), anyString()))
-                .thenThrow(new DataMatchException(ErrorCode.TABLE_NOT_SUPPORTED, "x", Map.of("reason", "NO_PK")));
-        assertThatThrownBy(() -> factory.create("test", "prod", "O", "X", List.of(ColumnSpec.plain("ID")), "A,B"))
-                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.TABLE_NOT_SUPPORTED));
+    void keyColumnMustBeGivenExistAndBeKeyable() {
+        for (String key : new String[] {null, "", "NOPE", "APPR_MSG"}) {
+            assertThatThrownBy(() -> factory.create("test", "prod", "O", "T", key, List.of(ColumnSpec.plain("AMOUNT")), "A,B"))
+                    .as(String.valueOf(key))
+                    .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
+        }
+        // 비교 키는 PK가 아니어도 문자형·NUMBER면 된다(PRD PA-10). 숫자 검증은 비교 키 타입을 따른다.
+        CompareTask byAmount = factory.create("test", "prod", "O", "T", "AMOUNT", List.of(ColumnSpec.plain("ID")), "1,2");
+        assertThat(byAmount.getKeyColumn()).isEqualTo("AMOUNT");
+        assertThatThrownBy(() -> factory.create("test", "prod", "O", "T", "AMOUNT", List.of(ColumnSpec.plain("ID")), "X,2"))
+                .satisfies(e -> assertThat(((DataMatchException) e).details())
+                        .isEqualTo(List.of(Map.of("line", 1, "reason", "INVALID_NUMBER"))));
+        assertThat(factory.create("test", "prod", "O", "T", "ID", List.of(ColumnSpec.plain("AMOUNT")), "X,2").getPairs()).hasSize(1);
     }
 
     @Test
     void pairInputErrorsAreInvalidInputWithLineDetails() {
-        assertThatThrownBy(() -> factory.create("test", "prod", "O", "T", List.of(ColumnSpec.plain("ID")), "A1,B1\nbad\n,B3"))
+        assertThatThrownBy(() -> factory.create("test", "prod", "O", "T", "ID", List.of(ColumnSpec.plain("ID")), "A1,B1\nbad\n,B3"))
                 .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT))
                 .satisfies(e -> assertThat(((DataMatchException) e).details()).isEqualTo(List.of(
                         Map.of("line", 2, "reason", "NO_DELIMITER"), Map.of("line", 3, "reason", "EMPTY_A"))));
-        assertThatThrownBy(() -> factory.create("test", "prod", "O", "N", List.of(ColumnSpec.plain("ID")), "1,2\nX,3"))
+        assertThatThrownBy(() -> factory.create("test", "prod", "O", "N", "ID", List.of(ColumnSpec.plain("ID")), "1,2\nX,3"))
                 .satisfies(e -> assertThat(((DataMatchException) e).details()).isEqualTo(List.of(
                         Map.of("line", 2, "reason", "INVALID_NUMBER"))));
         for (String empty : new String[] {"", "\n  \n", null}) {
-            assertThatThrownBy(() -> factory.create("test", "prod", "O", "T", List.of(ColumnSpec.plain("ID")), empty))
+            assertThatThrownBy(() -> factory.create("test", "prod", "O", "T", "ID", List.of(ColumnSpec.plain("ID")), empty))
                     .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
         }
     }
@@ -115,11 +123,11 @@ class CompareTaskFactoryTest {
     @Test
     void moreThanThousandPairsIsRejectedWithCount() {
         String text = IntStream.rangeClosed(1, 1001).mapToObj(i -> "A" + i + ",B" + i).collect(Collectors.joining("\n"));
-        assertThatThrownBy(() -> factory.create("test", "prod", "O", "T", List.of(ColumnSpec.plain("ID")), text))
+        assertThatThrownBy(() -> factory.create("test", "prod", "O", "T", "ID", List.of(ColumnSpec.plain("ID")), text))
                 .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT))
                 .satisfies(e -> assertThat(((DataMatchException) e).details())
                         .isEqualTo(List.of(Map.of("reason", "PAIR_LIMIT_EXCEEDED", "count", 1001))));
         String ok = IntStream.rangeClosed(1, 1000).mapToObj(i -> "A" + i + ",B" + i).collect(Collectors.joining("\n"));
-        assertThat(factory.create("test", "prod", "O", "T", List.of(ColumnSpec.plain("ID")), ok).getPairs()).hasSize(1000);
+        assertThat(factory.create("test", "prod", "O", "T", "ID", List.of(ColumnSpec.plain("ID")), ok).getPairs()).hasSize(1000);
     }
 }

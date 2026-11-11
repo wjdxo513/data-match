@@ -291,24 +291,45 @@ async function main(page) {
   });
 
   await safe('SN-E02-1', async () => {
+    // PRD v1.4: 복합 PK 테이블도 선택되고, 비교 키를 고르지 않으면 안내만 표시한다.
     await page.reload();
     await setEnv(page, 'dev', 'prod');
-    const input = page.getByLabel('테이블 검색');
-    const reasons = [];
-    for (const [name, text] of [
-      ['DM_IT_NOPK', 'PK가 없어 비교할 수 없습니다.'],
-      ['DM_IT_COMPOSITE', '복합 PK 테이블은 지원하지 않습니다.'],
-      ['DM_IT_DATEPK', 'PK 컬럼 타입을 지원하지 않아 비교할 수 없습니다.'],
-    ]) {
-      await input.fill(`DM_IT_OWNER.${name}`);
-      const opt = page.getByRole('option', { name: new RegExp(name) });
-      await opt.waitFor();
-      reasons.push((await opt.textContent()).includes(text));
-      await opt.dispatchEvent('click'); // aria-disabled 항목은 Playwright가 클릭을 막으므로 이벤트를 직접 보낸다
-    }
-    const s = await shot(page, 'sn-e02-1-unsupported-table');
-    const noColumns = (await page.getByRole('table', { name: '컬럼 목록' }).count()) === 0;
-    record('SN-E02-1', reasons.every(Boolean) && noColumns, `사유 3종 표시=${reasons.join('/')}, 선택되지 않음=${noColumns}`, s);
+    await pickTable(page, 'DM_IT_COMPOSITE');
+    const key = page.getByLabel('비교 키');
+    const defaultKey = await key.inputValue();
+    const options = await key.locator('option').allTextContents();
+    await checkColumns(page, ['VAL']);
+    await setPairs(page, 'C1,C1\nC2,C2');
+    await page.getByRole('button', { name: '비교 실행' }).click();
+    const guided = await page.getByText('비교 키 컬럼을 선택해 주세요.').isVisible();
+    const noModal = (await page.getByRole('dialog').count()) === 0;
+    const s = await shot(page, 'sn-e02-1-key-not-selected');
+    record('SN-E02-1', defaultKey === '' && guided && noModal,
+      `복합 PK 테이블 선택 가능, 비교 키 기본값 "선택 안 함", 후보=${options.join(' / ')}, 미선택 실행 → 안내만 표시=${guided && noModal}`, s);
+  });
+
+  await safe('SN-E04-7', async () => {
+    await page.getByLabel('비교 키').selectOption('K1');
+    await runAndWaitResult(page, 2);
+    const pills = await page.getByRole('listbox', { name: '요약 목록' }).locator('.pill').allTextContents();
+    await selectPair(page, 2);
+    await page.getByText('비교 키 값이 유일하지 않아 비교하지 않았습니다. (A쪽(개발) 2건, B쪽(운영) 2건)').waitFor();
+    const noTable = (await page.getByRole('table', { name: '상세 비교' }).count()) === 0;
+    const counts = await countsText(page);
+    const cond = (await page.getByTestId('result-condition').textContent()).trim();
+    const s = await shot(page, 'sn-e04-7-duplicate-key');
+    const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: '엑셀 다운로드' }).click()]);
+    const file = join(DOWNLOADS, 'dup-' + download.suggestedFilename());
+    await download.saveAs(file);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.readFile(file);
+    let excelDup = false;
+    wb.getWorksheet('상세').eachRow((row) => {
+      if (String(row.getCell(7).value ?? '') === '키 중복(A 2건·B 2건)' && (row.getCell(7).fill?.fgColor?.argb ?? '').endsWith('FFF0C8')) excelDup = true;
+    });
+    const keyRow = wb.getWorksheet('요약').getRow(4).values.slice(1).join('=');
+    record('SN-E04-7', pills.join(',') === '일치,키 중복(A 2건·B 2건)' && noTable && counts.includes('키 중복 1') && cond.includes('비교 키 K1') && excelDup,
+      `비교 키 K1: 라벨=${pills.join(', ')}, 상세 안내·비교 표 없음=${noTable}, 건수="${counts}", 조건="${cond}", 엑셀 호박색 "키 중복(A 2건·B 2건)"=${excelDup}, 요약 "${keyRow}"`, s);
   });
 
   await safe('SN-E01-3', async () => {

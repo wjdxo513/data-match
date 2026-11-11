@@ -35,9 +35,9 @@ import org.mockito.ArgumentCaptor;
 /** DB-03: 묶음 조회의 실행 횟수·바인딩·설정·매칭·취소·오류 분류를 목 연결로 확인한다. 실제 Oracle은 RowRepositoryOracleTest. */
 class OracleRowRepositoryTest {
 
-    private static final TableMetadata STR = new TableMetadata("O", "T", "ID", "VARCHAR2", List.of(
+    private static final TableMetadata STR = new TableMetadata("O", "T", List.of("ID"), List.of(
             new ColumnMeta("ID", "VARCHAR2", 10, null, null, 10), new ColumnMeta("VAL", "VARCHAR2", 10, null, null, 10)));
-    private static final TableMetadata NUM = new TableMetadata("O", "N", "ID", "NUMBER", List.of(
+    private static final TableMetadata NUM = new TableMetadata("O", "N", List.of("ID"), List.of(
             new ColumnMeta("ID", "NUMBER", 22, 15, 0, 0), new ColumnMeta("VAL", "VARCHAR2", 10, null, null, 10)));
 
     private Connection connection;
@@ -64,7 +64,7 @@ class OracleRowRepositoryTest {
         when(rs.next()).thenReturn(true, true, false);
         when(rs.getString(1)).thenReturn("A1", "A2");
         when(rs.getString(2)).thenReturn("v1", "v2");
-        Map<String, Map<String, String>> rows = repository.fetchRows("test", SqlBuilder.build(STR, List.of("VAL")),
+        Map<String, List<Map<String, String>>> rows = repository.fetchRows("test", SqlBuilder.build(STR, "ID", List.of("VAL")),
                 List.of("A1", "A2", "A1", "A3"), new CancellationToken());
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
@@ -77,15 +77,15 @@ class OracleRowRepositoryTest {
         verify(ps).setFetchSize(100);
         verify(ps, times(1)).executeQuery();
         assertThat(rows).containsOnlyKeys("A1", "A2");
-        assertThat(rows.get("A2")).containsExactly(Map.entry("VAL", "v2"));
+        assertThat(rows.get("A2").get(0)).containsExactly(Map.entry("VAL", "v2"));
     }
 
     @Test
     void inListNeverExceedsChunkSize() {
         List<String> keys = IntStream.rangeClosed(1, 101).mapToObj(i -> "K" + i).collect(Collectors.toList());
-        assertThatThrownBy(() -> repository.fetchRows("test", SqlBuilder.build(STR, List.of("VAL")), keys, new CancellationToken()))
+        assertThatThrownBy(() -> repository.fetchRows("test", SqlBuilder.build(STR, "ID", List.of("VAL")), keys, new CancellationToken()))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThat(repository.fetchRows("test", SqlBuilder.build(STR, List.of("VAL")), List.of(), new CancellationToken())).isEmpty();
+        assertThat(repository.fetchRows("test", SqlBuilder.build(STR, "ID", List.of("VAL")), List.of(), new CancellationToken())).isEmpty();
     }
 
     @Test
@@ -93,7 +93,7 @@ class OracleRowRepositoryTest {
         when(rs.next()).thenReturn(true, false);
         when(rs.getBigDecimal(1)).thenReturn(new BigDecimal("1"));
         when(rs.getString(2)).thenReturn("v");
-        Map<String, Map<String, String>> rows = repository.fetchRows("test", SqlBuilder.build(NUM, List.of("VAL")),
+        Map<String, List<Map<String, String>>> rows = repository.fetchRows("test", SqlBuilder.build(NUM, "ID", List.of("VAL")),
                 List.of("1", "1.0", "2"), new CancellationToken());
         verify(ps).setBigDecimal(1, new BigDecimal("1"));
         verify(ps).setBigDecimal(2, new BigDecimal("1.0"));
@@ -111,7 +111,7 @@ class OracleRowRepositoryTest {
             token.cancel();
             throw new SQLException("ORA-01013: user requested cancel of current operation", "72000", 1013);
         });
-        assertThatThrownBy(() -> repository.fetchRows("test", SqlBuilder.build(STR, List.of("VAL")), List.of("A1"), token))
+        assertThatThrownBy(() -> repository.fetchRows("test", SqlBuilder.build(STR, "ID", List.of("VAL")), List.of("A1"), token))
                 .isInstanceOf(QueryCancelledException.class);
         verify(ps).cancel();
     }
@@ -120,7 +120,7 @@ class OracleRowRepositoryTest {
     void alreadyCancelledTokenRunsNoQuery() throws Exception {
         CancellationToken token = new CancellationToken();
         token.cancel();
-        assertThatThrownBy(() -> repository.fetchRows("test", SqlBuilder.build(STR, List.of("VAL")), List.of("A1"), token))
+        assertThatThrownBy(() -> repository.fetchRows("test", SqlBuilder.build(STR, "ID", List.of("VAL")), List.of("A1"), token))
                 .isInstanceOf(QueryCancelledException.class);
         verify(connection, never()).prepareStatement(anyString());
     }
@@ -133,7 +133,7 @@ class OracleRowRepositoryTest {
                 .thenThrow(new SQLException("ORA-00942 secret detail", "42000", 942));
         ErrorCode[] expected = {ErrorCode.DB_CONNECTION_FAILED, ErrorCode.QUERY_TIMEOUT, ErrorCode.DB_QUERY_FAILED};
         for (ErrorCode code : expected) {
-            assertThatThrownBy(() -> repository.fetchRows("prod", SqlBuilder.build(STR, List.of("VAL")), List.of("A1"), new CancellationToken()))
+            assertThatThrownBy(() -> repository.fetchRows("prod", SqlBuilder.build(STR, "ID", List.of("VAL")), List.of("A1"), new CancellationToken()))
                     .isInstanceOf(DataMatchException.class)
                     .hasMessageNotContaining("secret")
                     .satisfies(e -> assertThat(((DataMatchException) e).code()).isEqualTo(code))
@@ -158,5 +158,16 @@ class OracleRowRepositoryTest {
         running.cancel();
         verify(t).cancel();
         assertThat(running.isCancelled()).isTrue();
+    }
+
+    @Test
+    void rowsWithTheSameKeyAreAllReturned() throws Exception {
+        when(rs.next()).thenReturn(true, true, true, false);
+        when(rs.getString(1)).thenReturn("C2", "C2", "C1");
+        when(rs.getString(2)).thenReturn("x2", "x3", "x1");
+        Map<String, List<Map<String, String>>> rows = repository.fetchRows("test", SqlBuilder.build(STR, "ID", List.of("VAL")),
+                List.of("C1", "C2"), new CancellationToken());
+        assertThat(rows.get("C2")).extracting(r -> r.get("VAL")).containsExactly("x2", "x3");
+        assertThat(rows.get("C1")).hasSize(1);
     }
 }

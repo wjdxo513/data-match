@@ -15,7 +15,6 @@ class ErrorCodeTest {
         Map<ErrorCode, HttpStatus> expected = new LinkedHashMap<>();
         expected.put(ErrorCode.INVALID_INPUT, HttpStatus.BAD_REQUEST);
         expected.put(ErrorCode.ENV_NOT_CONFIGURED, HttpStatus.BAD_REQUEST);
-        expected.put(ErrorCode.TABLE_NOT_SUPPORTED, HttpStatus.BAD_REQUEST);
         expected.put(ErrorCode.JOB_RUNNING, HttpStatus.CONFLICT);
         expected.put(ErrorCode.JOB_NOT_FOUND, HttpStatus.NOT_FOUND);
         expected.put(ErrorCode.JOB_NOT_COMPLETED, HttpStatus.CONFLICT);

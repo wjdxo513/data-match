@@ -18,6 +18,7 @@
 | v1.8 | 2026-11-10 | Claude | 확정 | BE-01 결과 반영(error 패키지, 오류 코드별 HTTP 상태) |
 | v1.9 | 2026-11-10 | Claude | 확정 | INT-03 실측 결과를 TA-09에 기록 |
 | v1.10 | 2026-11-10 | Claude | 확정 | SafeDB jar를 Git에서 제외하도록 TD-04 변경(공개 저장소) |
+| v1.11 | 2026-11-10 | Claude | 확정 | PRD v1.4 반영: 비교 키 선택, 키 중복 판정, API 변경(TABLE_NOT_SUPPORTED 삭제) |
 
 ## 변경 이력
 
@@ -37,10 +38,11 @@
 | v1.8 | 2026-11-10 | 4.1, 8장 | 추가 | 하위 계층이 web을 참조하지 않도록 오류 코드·예외를 `error` 패키지에 두기로 하고 4.1에 반영, 실행 계획 PL-04에 따라 BE-01에서 정한 오류 코드별 HTTP 상태 표와 보안 필터용 코드(`FORBIDDEN_REQUEST` 403, `UNSUPPORTED_MEDIA_TYPE` 415)를 8장에 추가 | Claude |
 | v1.9 | 2026-11-10 | 12장(TA-09) | 수정 | INT-03의 배포 zip 실측 결과(처리 시간, 최대 힙)를 TA-09 근거로 기록하고 초기값 유지를 명시 | Claude |
 | v1.10 | 2026-11-10 | 1.1(TD-04), 4.1, 4.2 | 수정 | 원격 저장소가 공개 저장소이므로 상용 라이브러리인 SafeDB jar 9개를 Git에서 제외하고, `backend/libs/safedb-lib/README.txt`로 복사 방법을 안내하며 jar가 9개가 아니면 빌드를 중단하도록 변경 | Claude |
+| v1.11 | 2026-11-10 | 1.1(TD-17), 4.1, 5장(FR-02·03·05·07·08·09), 6.2, 6.3, 8장, 9.5, 11장, 12장(TA-04) | 수정 | PRD v1.4(PA-10 변경)에 따라 테이블 후보의 선택 불가 판정을 없애고, 컬럼 조회에 기본 비교 키(`keyColumn`)와 `keyable`을 추가, 비교 요청에 `keyColumn`을 추가, 묶음 조회를 비교 키 기준 행 목록으로 바꾸고 키 중복(`DUPLICATE`, `duplicate: {a, b}`) 판정을 추가, 요약 건수에 `duplicate` 추가, 엑셀·화면의 키 중복 표시를 정의, 쓰이지 않게 된 `TABLE_NOT_SUPPORTED` 오류 코드를 삭제 | Claude |
 
 > 구분: 신규 / 추가 / 수정 / 삭제. 버전을 올릴 때는 '버전 이력'에 한 줄을 추가하고, 세부 변경 사항은 '변경 이력'에 섹션 단위로 기록한다.
 
-> 본 문서는 `1-PRD.md`(v1.3), `2-user-scenario.md`(v1.5), `3-screen-specification.md`(v1.5)를 기준으로 한다. 확정된 요구사항(FR, NFR, PA)과 시나리오(SN), 화면(SC)은 ID로 참조하고 다시 정의하지 않는다. 이 문서에서 새로 정한 사항은 설계 결정 `TD-xx`로, 검증이 필요하거나 확정되지 않은 사항은 마지막 장의 `TA-xx`로 관리한다.
+> 본 문서는 `1-PRD.md`(v1.4), `2-user-scenario.md`(v1.6), `3-screen-specification.md`(v1.6)를 기준으로 한다. 확정된 요구사항(FR, NFR, PA)과 시나리오(SN), 화면(SC)은 ID로 참조하고 다시 정의하지 않는다. 이 문서에서 새로 정한 사항은 설계 결정 `TD-xx`로, 검증이 필요하거나 확정되지 않은 사항은 마지막 장의 `TA-xx`로 관리한다.
 
 ## 1. 설계 개요
 
@@ -66,7 +68,7 @@
 | TD-14 | 중지는 취소 플래그와 JDBC `Statement.cancel()`로 처리하고 결과를 폐기한다 (WA-07, PA-18)              | 7장  |
 | TD-15 | 완료 응답은 요약 목록이고, 짝 상세는 선택할 때 지연 조회한다                                          | 8장  |
 | TD-16 | 엑셀은 Apache POI XSSF(메모리)로 만들며, 파일명은 `datamatch_{A환경}-{B환경}_{테이블}_{yyyyMMdd-HHmmss}.xlsx`, 시트는 "요약", "상세" 2개다 (WA-07) | 5장  |
-| TD-17 | 누락 상태는 호박색(노란 계열)과 "누락" 라벨로 표시한다 (WA-07)                                        | 5장  |
+| TD-17 | 누락과 키 중복 상태는 호박색(노란 계열)과 "누락"·"키 중복" 라벨로 표시한다 (WA-07, PRD v1.4)            | 5장  |
 | TD-18 | 프론트엔드는 React 18 + Vite + TypeScript이며 상태는 `useReducer`와 `useState`로 관리한다. 전역 상태 라이브러리와 UI 프레임워크는 쓰지 않는다 | 2, 4장 |
 | TD-19 | 로컬 보안으로 서버를 `127.0.0.1`에 바인딩하고, Host·Origin 검증과 JSON 전용 요청 정책을 둔다           | 9장  |
 | TD-20 | 로그에는 복호화 평문, 거래번호, 컬럼 값을 남기지 않는다. 로그 파일은 7일 보관한다                      | 9장  |
@@ -195,7 +197,7 @@ backend/
     config/      환경 설정(@ConfigurationProperties), DataSourceRegistry, LocalOnlyFilter
     web/         Controller, dto, GlobalExceptionHandler, ApiError
     error/       ErrorCode, DataMatchException (모든 계층이 함께 쓰는 오류 코드·예외)
-    metadata/    MetadataService, MetadataRepository (테이블 검색, 컬럼·PK 조회)
+    metadata/    MetadataService, MetadataRepository (테이블 검색, 컬럼·PK·비교 키 조회)
     compare/     CompareService, ChunkProcessor, RowRepository, SqlBuilder, ValueConverter,
                  CompareEngine, JsonFlattener, PairsParser, 결과 모델
     safedb/      Decryptor(인터페이스), SafeDbDecryptor, DecryptPolicy
@@ -228,13 +230,13 @@ PRD의 FR별 처리 구조를 정리한다. 요구사항 자체는 PRD를 따른
 
 **FR-01 환경별 DB 연결.** `config/datamatch.properties`에 `dev`, `test`, `prod` 세 환경의 JDBC URL, 계정, 비밀번호를 정의한다. 설정이 없는 환경은 환경 목록 API에서 빼므로 드롭다운에 나타나지 않는다. `GET /api/environments`는 환경 ID, 표시 이름(개발/테스트/운영), 운영 여부만 반환하며 접속 정보는 절대 반환하지 않는다. 운영 환경 여부는 프론트가 SC01-03 경고 배지 표시에 사용한다.
 
-**FR-02 테이블 검색·선택.** 6.2절의 메타데이터 검색을 사용한다. 응답의 각 후보에 `selectable`과 선택 불가 사유(`NO_PK`, `COMPOSITE_PK`, `UNSUPPORTED_PK_TYPE`)를 포함하고, 화면 정의서의 사유 문구는 프론트가 매핑한다.
+**FR-02 테이블 검색·선택.** 6.2절의 메타데이터 검색을 사용한다. PRD v1.4부터 모든 테이블을 선택할 수 있으므로(PA-10) 후보에는 소유자와 테이블 이름만 담고 PK 판정을 하지 않는다.
 
-**FR-03 컬럼 조회·선택.** 테이블을 선택하면 컬럼 목록(이름, 타입 표시용 문자열, PK 여부, CLOB 여부)과 PK 컬럼명을 반환한다. 컬럼 검색과 전체 선택/해제는 프론트에서 이미 받은 목록을 대상으로 처리하며 서버 호출이 없다. PK 컬럼도 비교 컬럼으로 선택할 수 있다(WA-02).
+**FR-03 컬럼 조회·선택.** 테이블을 선택하면 컬럼 목록(이름, 타입 표시용 문자열, PK 여부, CLOB 여부, 비교 키 가능 여부)과 기본 비교 키를 반환한다. 비교 키 가능 컬럼은 타입이 문자형(CHAR, VARCHAR2, NCHAR, NVARCHAR2) 또는 NUMBER인 컬럼이고(PA-19), 기본 비교 키는 PK가 한 컬럼이고 그 컬럼이 비교 키 가능일 때의 PK이며 그 밖에는 없음(null)이다. 비교 요청에는 사용자가 고른 비교 키(`keyColumn`)를 담고, 서버는 메타데이터에 있고 비교 키 가능인 컬럼인지 다시 확인해 아니면 `INVALID_INPUT`으로 거절한다(PA-10, NFR-04). 컬럼 검색과 전체 선택/해제는 프론트에서 이미 받은 목록을 대상으로 처리하며 서버 호출이 없다. PK 컬럼도 비교 컬럼으로 선택할 수 있다(WA-02).
 
 **FR-04 복호화 컬럼 지정.** 비교 요청의 컬럼 항목에 `decrypt: {policy: KDKEY | PANEN}`을 붙인다. 서버는 요청 시 메타데이터를 다시 조회해 해당 컬럼이 CLOB이고 비교 컬럼에 포함되어 있는지 검증하고, 아니면 `INVALID_INPUT`으로 거절한다.
 
-**FR-05 거래번호 짝 입력.** 입력 규칙(앞뒤 공백 제거, 빈 줄 무시, 쉼표 또는 탭 구분, 한 줄 구분자 정확히 1개, 값 비어 있지 않음, 최대 1,000쌍)은 `PairsParser`가 서버에서 최종 검증하며, 프론트의 `pairsParser.ts`는 실시간 건수·오류 표시용으로 같은 규칙을 구현한다. 두 구현이 어긋나지 않도록 같은 테스트 케이스 표를 양쪽 단위 테스트에 사용한다. PK 타입이 숫자(NUMBER)이면 서버가 숫자 형식 검증을 추가로 수행해 오류 줄을 반환한다(PA-19). 서버는 오류를 코드와 줄 번호로 반환하고(`NO_DELIMITER`, `EMPTY_A`, `EMPTY_B`, `TOO_MANY_DELIMITERS`, `INVALID_NUMBER`, `PAIR_LIMIT_EXCEEDED`), 한국어 메시지는 화면 정의서의 문구를 사용하는 프론트가 한 곳에서 만든다.
+**FR-05 거래번호 짝 입력.** 입력 규칙(앞뒤 공백 제거, 빈 줄 무시, 쉼표 또는 탭 구분, 한 줄 구분자 정확히 1개, 값 비어 있지 않음, 최대 1,000쌍)은 `PairsParser`가 서버에서 최종 검증하며, 프론트의 `pairsParser.ts`는 실시간 건수·오류 표시용으로 같은 규칙을 구현한다. 두 구현이 어긋나지 않도록 같은 테스트 케이스 표를 양쪽 단위 테스트에 사용한다. 비교 키 타입이 숫자(NUMBER)이면 서버가 숫자 형식 검증을 추가로 수행해 오류 줄을 반환한다(PA-19). 서버는 오류를 코드와 줄 번호로 반환하고(`NO_DELIMITER`, `EMPTY_A`, `EMPTY_B`, `TOO_MANY_DELIMITERS`, `INVALID_NUMBER`, `PAIR_LIMIT_EXCEEDED`), 한국어 메시지는 화면 정의서의 문구를 사용하는 프론트가 한 곳에서 만든다.
 
 **FR-06 비교 실행·진행 표시.** 비교 시작은 작업을 만들고 즉시 `jobId`와 전체 쌍 수를 반환한다. 이후 7장의 작업 구조로 실행하며, 진행률과 중지는 7장에서 설명한다. DB 연결 실패, 조회 타임아웃, 그 밖의 DB 오류는 전체 비교 실패로 처리하고 부분 결과를 만들지 않는다(PA-17).
 
@@ -250,18 +252,18 @@ PRD의 FR별 처리 구조를 정리한다. 요구사항 자체는 PRD를 따른
 | 한쪽에만 있는 키                       | 없는 쪽을 NULL로 보고 비교한다(PA-04)                                                                                                 |
 | 복호화 실패, JSON 문법 오류, 최상위가 객체가 아님 | 해당 컬럼을 한 행으로 만들고 상태 "복호화 오류"와 원인 코드(`DECRYPT_FAILED`, `JSON_INVALID`, `JSON_NOT_OBJECT`), 오류가 난 쪽(A/B)을 기록한다. 다른 컬럼과 짝은 계속 비교한다 |
 
-짝의 판정은 PRD 6.1을 그대로 구현한다. 어느 한쪽 행이 없으면 "누락"이고 컬럼 비교를 하지 않는다. 양쪽 행이 있으면 불일치 또는 복호화 오류 행이 하나라도 있을 때 "불일치"이고, 그렇지 않으면 "일치"다. 요약의 불일치 수는 불일치와 복호화 오류 행의 합이다.
+짝의 판정은 PRD 6.1을 그대로 구현한다. 비교 키로 어느 한쪽에서 행이 2건 이상 조회되면 "키 중복"(`DUPLICATE`)이고 양쪽 조회 건수(`duplicate: {a, b}`)를 기록하며 컬럼 비교를 하지 않는다. 키 중복이 아니고 어느 한쪽 행이 없으면 "누락"이고 컬럼 비교를 하지 않는다. 양쪽 행이 있으면 불일치 또는 복호화 오류 행이 하나라도 있을 때 "불일치"이고, 그렇지 않으면 "일치"다. 요약의 불일치 수는 불일치와 복호화 오류 행의 합이다.
 
-**FR-08 결과 요약·상세.** 완료된 작업은 비교 조건(환경 A·B, 소유자.테이블, 비교 컬럼과 복호화 지정, 비교 일시)을 결과에 함께 보관한다. 화면은 이 값으로 SC03-01을 표시하므로 사용자가 이후 입력을 바꿔도 기존 결과의 조건은 바뀌지 않는다(SA-09). 요약 응답에는 짝 순서(입력 순서), 거래번호 A·B, 판정, 불일치 수, 누락 쪽(A/B/BOTH)을 담고, 상세는 선택 시 조회한다(TD-15). 상세 행의 `name`은 일반 컬럼은 컬럼명, 복호화 컬럼은 `컬럼명.필드명`이다. 값은 잘라서 보내지 않고 긴 값의 접기·펼치기는 프론트가 처리한다. 판정 색은 일치는 기본색, 불일치·복호화 오류는 빨간색, 누락은 호박색(TD-17)이며 "일치/불일치/누락/복호화 오류" 라벨을 함께 표시한다.
+**FR-08 결과 요약·상세.** 완료된 작업은 비교 조건(환경 A·B, 소유자.테이블, 비교 키, 비교 컬럼과 복호화 지정, 비교 일시)을 결과에 함께 보관한다. 화면은 이 값으로 SC03-01을 표시하므로 사용자가 이후 입력을 바꿔도 기존 결과의 조건은 바뀌지 않는다(SA-09). 요약 응답에는 짝 순서(입력 순서), 거래번호 A·B, 판정, 불일치 수, 누락 쪽(A/B/BOTH), 키 중복 건수를 담고, 상세는 선택 시 조회한다(TD-15). 상세 행의 `name`은 일반 컬럼은 컬럼명, 복호화 컬럼은 `컬럼명.필드명`이다. 값은 잘라서 보내지 않고 긴 값의 접기·펼치기는 프론트가 처리한다. 판정 색은 일치는 기본색, 불일치·복호화 오류는 빨간색, 누락과 키 중복은 호박색(TD-17)이며 "일치/불일치/누락/키 중복/복호화 오류" 라벨을 함께 표시한다.
 
 **FR-09 엑셀 다운로드.** 서버에 보관된 결과로 엑셀을 만들기 때문에 DB를 다시 조회하지 않는다(TD-16). 프론트는 `fetch`로 파일을 받아 저장하므로, 실패 시 화면 결과를 유지한 채 오류를 안내하고 다시 시도할 수 있다(SA-06). 파일 구성은 다음과 같다.
 
 | 항목     | 내용                                                                                                                                              |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 파일명   | `datamatch_{A환경}-{B환경}_{테이블}_{yyyyMMdd-HHmmss}.xlsx` (예: `datamatch_test-prod_TB_PAY_TRX_20261109-151530.xlsx`). 거래번호는 넣지 않는다 |
-| "요약" 시트 | 상단에 비교 조건(A·B 환경, 테이블, 비교 컬럼, 비교 일시, 총 쌍/일치/불일치/누락 건수). 아래에 순번, 거래번호A, 거래번호B, 판정, 불일치 수, 비고(누락 쪽, 복호화 오류 여부) |
-| "상세" 시트 | 순번, 거래번호A, 거래번호B, 컬럼·필드, A값(환경명), B값(환경명), 상태. 화면과 같이 일치 항목도 모두 포함. 누락 짝은 상태가 "누락(B 없음)"인 한 행으로 기록 |
-| 강조     | 불일치와 복호화 오류 행은 빨간 글자·연한 빨간 배경, 누락은 호박색, 일치는 기본. 상태 열에 텍스트 라벨을 항상 기록                                  |
+| "요약" 시트 | 상단에 비교 조건(A·B 환경, 테이블, 비교 키, 비교 컬럼, 비교 일시, 총 쌍/일치/불일치/누락/키 중복 건수). 아래에 순번, 거래번호A, 거래번호B, 판정, 불일치 수, 비고(누락 쪽, 키 중복 건수, 복호화 오류 여부) |
+| "상세" 시트 | 순번, 거래번호A, 거래번호B, 컬럼·필드, A값(환경명), B값(환경명), 상태. 화면과 같이 일치 항목도 모두 포함. 누락·키 중복 짝은 상태가 "누락(B 없음)", "키 중복(A 2건)"인 한 행으로 기록 |
+| 강조     | 불일치와 복호화 오류 행은 빨간 글자·연한 빨간 배경, 누락과 키 중복은 호박색, 일치는 기본. 상태 열에 텍스트 라벨을 항상 기록                                  |
 | 제한     | 셀 문자 한도(32,767자)를 넘는 값은 잘라 "…(이하 생략)"을 붙인다. 값은 문자열 셀로만 기록하므로 `=`로 시작해도 수식으로 해석되지 않는다            |
 
 ## 6. DB 접근 및 데이터 처리
@@ -272,7 +274,7 @@ PRD의 FR별 처리 구조를 정리한다. 요구사항 자체는 PRD를 따른
 
 ### 6.2 메타데이터 검색 (TD-07)
 
-메타데이터는 항상 A쪽 환경에서 `ALL_TABLES`, `ALL_CONSTRAINTS`, `ALL_CONS_COLUMNS`, `ALL_TAB_COLUMNS`로 조회한다. 접속 계정이 조회 권한을 가진 모든 스키마가 대상이므로(PA-02) `ALL_*` 뷰를 쓴다. 테이블 후보 조회는 `UPPER(OWNER || '.' || TABLE_NAME) LIKE ? ESCAPE '\'`로 검색한 뒤 `ROWNUM <= 31`로 조회한다(`FETCH FIRST`는 12c 이상이어서 Oracle 버전과 무관하게 `ROWNUM`을 쓴다). 31번째 행이 있으면 `truncated: true`로 표시하고 앞의 30건만 반환한다. 사용자 입력의 `%`, `_`, `\`는 이스케이프한다. PK 판정은 이 30건에만 수행해 `ALL_CONSTRAINTS`(타입 `P`)와 `ALL_CONS_COLUMNS`의 컬럼 수가 1인지 확인한다. PK 컬럼 타입이 문자형 또는 NUMBER가 아니면 선택 불가(`UNSUPPORTED_PK_TYPE`)로 둔다(PA-19). 프론트는 `truncated`이면 검색어를 더 입력하도록 안내한다(화면 정의서 WA-11). 전체 메타데이터를 메모리에 캐시하지 않는다.
+메타데이터는 항상 A쪽 환경에서 `ALL_TABLES`, `ALL_CONSTRAINTS`, `ALL_CONS_COLUMNS`, `ALL_TAB_COLUMNS`로 조회한다. 접속 계정이 조회 권한을 가진 모든 스키마가 대상이므로(PA-02) `ALL_*` 뷰를 쓴다. 테이블 후보 조회는 `UPPER(OWNER || '.' || TABLE_NAME) LIKE ? ESCAPE '\'`로 검색한 뒤 `ROWNUM <= 31`로 조회한다(`FETCH FIRST`는 12c 이상이어서 Oracle 버전과 무관하게 `ROWNUM`을 쓴다). 31번째 행이 있으면 `truncated: true`로 표시하고 앞의 30건만 반환한다. 사용자 입력의 `%`, `_`, `\`는 이스케이프한다. PK 구성(`ALL_CONSTRAINTS` 타입 `P`, `ALL_CONS_COLUMNS`)은 선택한 테이블의 컬럼 조회 때만 확인해 PK 표시와 기본 비교 키(FR-03)를 정한다. 프론트는 `truncated`이면 검색어를 더 입력하도록 안내한다(화면 정의서 WA-11). 전체 메타데이터를 메모리에 캐시하지 않는다.
 
 프론트는 입력 후 300ms 동안 추가 입력이 없을 때, 그리고 2자 이상일 때만 검색 API를 호출하고 이전 요청은 취소한다. 메타데이터에 존재하지 않는 소유자·테이블·컬럼 이름은 비교 요청에서 거절하며, SQL에 들어가는 식별자는 항상 메타데이터에서 읽은 값을 큰따옴표로 감싸 사용한다(NFR-04).
 
@@ -281,10 +283,10 @@ PRD의 FR별 처리 구조를 정리한다. 요구사항 자체는 PRD를 따른
 한 청크(최대 100쌍)마다 거래번호A 목록(중복 제거)과 거래번호B 목록을 각각 해당 환경에서 한 번씩 조회한다.
 
 ```sql
-SELECT "<PK>", <변환된 컬럼 식...> FROM "<OWNER>"."<TABLE>" WHERE "<PK>" IN (?, ?, ..., ?)
+SELECT "<비교 키>", <변환된 컬럼 식...> FROM "<OWNER>"."<TABLE>" WHERE "<비교 키>" IN (?, ?, ..., ?)
 ```
 
-선택한 컬럼만 조회하고 PK 컬럼은 선택 컬럼에 없어도 매칭용으로 함께 조회한다. 한 청크의 IN 목록은 최대 100개여서 Oracle의 1,000개 제한(ORA-01795)과 무관하다. PK가 문자형이면 문자열로, NUMBER이면 `BigDecimal`로 바인딩한다. 결과는 `Map<거래번호, 행>`으로 만들어 짝의 입력 순서대로 A·B를 매칭하므로 같은 거래번호가 여러 짝에 나와도 한 번만 조회하고 결과 순서는 입력 순서를 유지한다. 한쪽 키가 조회되지 않으면 "누락"이다. 페치 크기는 100으로 한다.
+선택한 컬럼만 조회하고 비교 키 컬럼은 선택 컬럼에 없어도 매칭용으로 함께 조회한다. 한 청크의 IN 목록은 최대 100개여서 Oracle의 1,000개 제한(ORA-01795)과 무관하다. 비교 키가 문자형이면 문자열로, NUMBER이면 `BigDecimal`로 바인딩한다. 결과는 `Map<거래번호, 행 목록>`으로 만들어(키 값이 유일하지 않을 수 있으므로 같은 키의 행을 모두 모은다, PA-10) 짝의 입력 순서대로 A·B를 매칭하므로 같은 거래번호가 여러 짝에 나와도 한 번만 조회하고 결과 순서는 입력 순서를 유지한다. 한쪽 키가 조회되지 않으면 "누락", 2건 이상이면 "키 중복"이다. 인덱스가 없는 컬럼을 비교 키로 고르면 조회가 느려질 수 있다(PRD PA-20). 페치 크기는 100으로 한다.
 
 ### 6.4 값 변환 (TD-09)
 
@@ -338,13 +340,13 @@ PRD 6.1의 "DB에서 읽은 값을 문자열로 변환한 값 기준"을 타입�
 | Method | URL                                  | 목적                       | 요청                                                                 | 응답                                                              | 오류                                          |
 | ------ | ------------------------------------ | -------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
 | GET    | `/api/environments`                  | 선택 가능한 환경 목록      | -                                                                    | `[{id, name, production}]`                                        | -                                             |
-| GET    | `/api/tables`                        | 테이블 검색(자동완성)      | `env`, `q`(2자 이상)                                                 | `{items:[{owner, name, selectable, reason, pkColumn}], truncated}` | `INVALID_INPUT`, `ENV_NOT_CONFIGURED`, `DB_CONNECTION_FAILED`, `DB_QUERY_FAILED` |
-| GET    | `/api/tables/columns`                | 컬럼·PK 조회               | `env`, `owner`, `table`                                              | `{pkColumn, columns:[{name, type, pk, clob}]}`                    | 위와 동일, `TABLE_NOT_SUPPORTED`              |
-| POST   | `/api/compare`                       | 비교 시작                  | 아래 예시                                                            | 202 `{jobId, total}`                                              | `INVALID_INPUT`, `ENV_NOT_CONFIGURED`, `TABLE_NOT_SUPPORTED`, `JOB_RUNNING` |
+| GET    | `/api/tables`                        | 테이블 검색(자동완성)      | `env`, `q`(2자 이상)                                                 | `{items:[{owner, name}], truncated}`                              | `INVALID_INPUT`, `ENV_NOT_CONFIGURED`, `DB_CONNECTION_FAILED`, `DB_QUERY_FAILED` |
+| GET    | `/api/tables/columns`                | 컬럼·비교 키 조회          | `env`, `owner`, `table`                                              | `{keyColumn, columns:[{name, type, pk, clob, keyable}]}`          | 위와 동일(없는 테이블은 `INVALID_INPUT`)      |
+| POST   | `/api/compare`                       | 비교 시작                  | 아래 예시                                                            | 202 `{jobId, total}`                                              | `INVALID_INPUT`, `ENV_NOT_CONFIGURED`, `JOB_RUNNING` |
 | GET    | `/api/compare/{jobId}`               | 진행 상태 조회             | -                                                                    | `{status, processed, total, errorCode, failedSide, failedEnv}`    | `JOB_NOT_FOUND`                               |
 | POST   | `/api/compare/{jobId}/cancel`        | 비교 중지                  | -                                                                    | 202 `{status}`                                                    | `JOB_NOT_FOUND`                               |
 | GET    | `/api/compare/{jobId}/summary`       | 결과 요약(조건, 건수, 목록) | -                                                                   | 아래 예시                                                         | `JOB_NOT_FOUND`, `JOB_NOT_COMPLETED`          |
-| GET    | `/api/compare/{jobId}/pairs/{index}` | 짝 상세                    | -                                                                    | `{index, a, b, status, missing, rows:[{name, a, b, status, message}]}` | `JOB_NOT_FOUND`, `JOB_NOT_COMPLETED`, `PAIR_NOT_FOUND` |
+| GET    | `/api/compare/{jobId}/pairs/{index}` | 짝 상세                    | -                                                                    | `{index, a, b, status, missing, duplicate, rows:[{name, a, b, status, message}]}` | `JOB_NOT_FOUND`, `JOB_NOT_COMPLETED`, `PAIR_NOT_FOUND` |
 | GET    | `/api/compare/{jobId}/excel`         | 엑셀 다운로드              | -                                                                    | `.xlsx` (Content-Disposition)                                     | `JOB_NOT_FOUND`, `JOB_NOT_COMPLETED`, `EXCEL_FAILED` |
 
 비교 시작 요청과 요약 응답 예시는 다음과 같다. 요청에는 입력창의 원문 텍스트를 그대로 보내고 서버가 파싱한다.
@@ -352,7 +354,7 @@ PRD 6.1의 "DB에서 읽은 값을 문자열로 변환한 값 기준"을 타입�
 ```json
 {
   "envA": "test", "envB": "prod",
-  "owner": "PAYZONE", "table": "TB_PAY_TRX",
+  "owner": "PAYZONE", "table": "TB_PAY_TRX", "keyColumn": "TRX_NO",
   "columns": [
     { "name": "ORDER_NO" },
     { "name": "APPR_MSG", "decrypt": { "policy": "KDKEY" } }
@@ -363,11 +365,11 @@ PRD 6.1의 "DB에서 읽은 값을 문자열로 변환한 값 기준"을 타입�
 
 ```json
 {
-  "condition": { "envA": "test", "envB": "prod", "owner": "PAYZONE", "table": "TB_PAY_TRX",
+  "condition": { "envA": "test", "envB": "prod", "owner": "PAYZONE", "table": "TB_PAY_TRX", "keyColumn": "TRX_NO",
                  "columns": [ {"name":"ORDER_NO"}, {"name":"APPR_MSG","decrypt":"KDKEY"} ],
                  "comparedAt": "2026-11-09T15:15:30" },
-  "counts": { "total": 2, "match": 1, "mismatch": 1, "missing": 0 },
-  "items": [ { "index": 1, "a": "T20261109001", "b": "P20261109001", "status": "MATCH", "mismatchCount": 0, "missing": null } ]
+  "counts": { "total": 2, "match": 1, "mismatch": 1, "missing": 0, "duplicate": 0 },
+  "items": [ { "index": 1, "a": "T20261109001", "b": "P20261109001", "status": "MATCH", "mismatchCount": 0, "missing": null, "duplicate": null } ]
 }
 ```
 
@@ -376,7 +378,7 @@ PRD 6.1의 "DB에서 읽은 값을 문자열로 변환한 값 기준"을 타입�
 
 | HTTP 상태 | 오류 코드 |
 | --------- | --------- |
-| 400 | `INVALID_INPUT`, `ENV_NOT_CONFIGURED`, `TABLE_NOT_SUPPORTED` |
+| 400 | `INVALID_INPUT`, `ENV_NOT_CONFIGURED` |
 | 403 | `FORBIDDEN_REQUEST` |
 | 404 | `JOB_NOT_FOUND`, `PAIR_NOT_FOUND` |
 | 409 | `JOB_RUNNING`, `JOB_NOT_COMPLETED` |
@@ -411,10 +413,10 @@ SafeDB 인증 설정과 접속 설정(`SafeDBMap_config.xml`, `SafeDBAccess.prop
 | 구분                | 상황                                              | 처리                                                   | 화면(SC)           |
 | ------------------- | ------------------------------------------------- | ------------------------------------------------------ | ------------------ |
 | 입력 오류(요청 거절) | 형식 오류, 1,000쌍 초과, 컬럼·복호화 지정 불일치  | 400 `INVALID_INPUT`, 비교 시작 안 함                   | SC-01              |
-| 메타데이터 오류     | 환경 미설정, 연결 실패, 테이블 조회 실패, PK 미지원 | `ENV_NOT_CONFIGURED`, `DB_CONNECTION_FAILED`, `DB_QUERY_FAILED`, `TABLE_NOT_SUPPORTED` | SC-01 |
+| 메타데이터 오류     | 환경 미설정, 연결 실패, 테이블 조회 실패          | `ENV_NOT_CONFIGURED`, `DB_CONNECTION_FAILED`, `DB_QUERY_FAILED` | SC-01 |
 | 전체 작업 실패      | 비교 중 연결 실패, 타임아웃, 그 밖의 DB 오류      | 작업 `FAILED`, 부분 결과 없음 (PA-17)                  | SC-02              |
 | 사용자 중지         | 중지 버튼                                         | 작업 `CANCELLED`, 결과 폐기 (PA-18)                    | SC-02 → SC-01      |
-| 개별 짝 결과        | A·B 거래 없음                                     | 해당 짝 "누락", 나머지 계속                            | SC-03              |
+| 개별 짝 결과        | A·B 거래 없음, 비교 키로 2건 이상 조회            | 해당 짝 "누락" 또는 "키 중복", 나머지 계속             | SC-03              |
 | 개별 컬럼 오류      | 복호화 실패, JSON 해석 실패                       | 해당 컬럼 "복호화 오류", 짝은 "불일치", 나머지 계속    | SC-03              |
 | 엑셀 실패           | 파일 생성 오류                                    | 500 `EXCEL_FAILED`, 화면 결과 유지                     | SC-03              |
 | 서버 내부 오류      | 예상하지 못한 예외                                | 500 `INTERNAL_ERROR`, 작업 중이면 `FAILED`             | -                  |
@@ -453,7 +455,7 @@ SafeDB 인증 설정과 접속 설정(`SafeDBMap_config.xml`, `SafeDBAccess.prop
 | NFR-08, NFR-09 | 로컬 실행, 메타데이터 기반 처리 | TD-02, TD-03, TD-07  | -                       | -             | 3, 6.2 |
 | WA-07          | 색상, 엑셀, 진행률, 중지, 자동완성 | TD-07, TD-13, TD-14, TD-16, TD-17 | SN-01, SN-04 | SC-02, SC-03  | 5, 6.2, 7 |
 
-MVP 요구사항 FR-01~FR-09는 모두 설계에 반영되었다. FR-10, FR-11, 엑셀 업로드, 복합 PK, 중첩 JSON 펼치기는 설계하지 않았다.
+MVP 요구사항 FR-01~FR-09는 모두 설계에 반영되었다. FR-10, FR-11, 엑셀 업로드, 여러 컬럼을 조합한 복합 키, 중첩 JSON 펼치기는 설계하지 않았다. 복합 PK 테이블은 비교 키 컬럼 하나로 비교한다(PRD v1.4 PA-10).
 
 ## 12. 가정·미결 사항
 
@@ -462,7 +464,7 @@ MVP 요구사항 FR-01~FR-09는 모두 설계에 반영되었다. FR-10, FR-11, 
 | TA-01 | 미결 | SafeDB 설정 파일 탐색 방식. `SafeDBAccess.properties`는 classpath에서 찾는 것을 확인했다(2026-11-09, 작업 폴더에만 두면 실패). `SafeDBMap_config.xml`·`inilog4j.properties`(작업 폴더 상대경로 `./`로 보임)는 서버 연결 이후 단계라 외부망 개발 PC에서 확인하지 못했고, 사내망 PC에서 확인해 `start.bat`을 최종 조정한다. SETUP-04(2026-11-10)에서 압축을 푼 배포 구조로 재현했다: 작업 폴더와 classpath(`.`)를 `config`로 두는 `start.bat` 규칙에서는 설정을 찾아 서버 연결 단계까지 진행했고, `config`를 classpath에서 빼면 같은 오류로 실패했다 |
 | TA-02 | 미결 | 2026-11-09 외부망 개발 PC에서 JDK 11로 SafeDB jar 9개의 로딩과 암호 모듈 초기화는 정상이었고 서버 연결은 불가(연결 시간 초과)했다. 사내망 PC에서 JDK 11에서 SafeDB jar 9개의 동작과 개발·테스트·운영 환경별 복호화(한글 포함)를 실제로 검증한다. 필요한 최소 jar 집합도 이때 확인하며(`xercesImpl`, `xml-apis` 필요 여부 등), JDK 17/Boot 3 전환은 이 검증 이후에만 검토한다 (PA-14, R-05) |
 | TA-03 | 미결 | 대상 Oracle 버전을 확인하고 `ojdbc8`과의 호환을 검증한다. pgweb-boot 저장소에 구버전 `ojdbc14.jar`가 있어 구버전 DB 가능성이 있으며, 그 경우 `ROWNUM` 기반 쿼리 등은 그대로 사용 가능하나 드라이버를 재검토한다 |
-| TA-04 | 해결 | 단일 PK 컬럼 타입 제한(문자형과 NUMBER만 지원)은 PRD PA-19로 확정했다. NUMBER PK에 숫자가 아닌 입력이 있으면 입력 오류 줄로 처리한다 |
+| TA-04 | 해결 | 비교 키 컬럼 타입 제한(문자형과 NUMBER만 지원)은 PRD PA-19로 확정했다(v1.4에서 단일 PK 제한을 비교 키 선택으로 바꿈). NUMBER 비교 키에 숫자가 아닌 입력이 있으면 입력 오류 줄로 처리한다 |
 | TA-05 | 가정 | 연결 실패·타임아웃 외의 DB 오류(권한 부족, 테이블 없음 등)도 같은 방식의 전체 비교 실패(`DB_QUERY_FAILED`)로 처리한다 |
 | TA-06 | 가정 | 복호화 결과가 JSON 객체가 아니면(배열, 숫자, 빈 문자열 등) 복호화 오류(`JSON_NOT_OBJECT`, `JSON_INVALID`)로 처리한다 |
 | TA-07 | 가정 | 복호화 문자셋은 pgweb-boot와 같이 KDKEY는 EUC-KR, PANEN은 UTF-8(`-Dfile.encoding=UTF-8`)이다. 한글이 포함된 실제 데이터로 원본과 일치하는지 검증한다 |

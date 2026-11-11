@@ -4,15 +4,15 @@ import {
   type AppState,
   buildCompareRequest,
   initialState,
-  pkType,
+  keyType,
   reducer,
 } from './reducer';
 
 const COLUMNS: ColumnInfo[] = [
-  { name: 'TRX_NO', type: 'VARCHAR2(20)', pk: true, clob: false },
-  { name: 'AMOUNT', type: 'NUMBER', pk: false, clob: false },
-  { name: 'APPR_MSG', type: 'CLOB', pk: false, clob: true },
-  { name: 'EXTRA_MSG', type: 'CLOB', pk: false, clob: true },
+  { name: 'TRX_NO', type: 'VARCHAR2(20)', pk: true, clob: false, keyable: true },
+  { name: 'AMOUNT', type: 'NUMBER', pk: false, clob: false, keyable: true },
+  { name: 'APPR_MSG', type: 'CLOB', pk: false, clob: true, keyable: false },
+  { name: 'EXTRA_MSG', type: 'CLOB', pk: false, clob: true, keyable: false },
 ];
 
 const TABLE = {
@@ -29,13 +29,30 @@ const SUMMARY: CompareSummary = {
     envB: 'prod',
     owner: 'DM_IT_OWNER',
     table: 'DM_IT_TRX_STR',
+    keyColumn: 'TRX_NO',
     columns: [{ name: 'AMOUNT' }, { name: 'APPR_MSG', decrypt: 'KDKEY' }],
     comparedAt: '2026-11-10T10:00:00',
   },
-  counts: { total: 2, match: 1, mismatch: 1, missing: 0 },
+  counts: { total: 2, match: 1, mismatch: 1, missing: 0, duplicate: 0 },
   items: [
-    { index: 1, a: 'A1', b: 'B1', status: 'MATCH', mismatchCount: 0, missing: null },
-    { index: 2, a: 'A2', b: 'B2', status: 'MISMATCH', mismatchCount: 1, missing: null },
+    {
+      index: 1,
+      a: 'A1',
+      b: 'B1',
+      status: 'MATCH',
+      mismatchCount: 0,
+      missing: null,
+      duplicate: null,
+    },
+    {
+      index: 2,
+      a: 'A2',
+      b: 'B2',
+      status: 'MISMATCH',
+      mismatchCount: 1,
+      missing: null,
+      duplicate: null,
+    },
   ],
 };
 
@@ -47,7 +64,7 @@ function ready(): AppState {
     { type: 'SET_ENV_A', env: 'test' },
     { type: 'SET_ENV_B', env: 'prod' },
     { type: 'SELECT_TABLE', table: TABLE },
-    { type: 'COLUMNS_LOADED', pkColumn: 'TRX_NO', columns: COLUMNS },
+    { type: 'COLUMNS_LOADED', keyColumn: 'TRX_NO', columns: COLUMNS },
     { type: 'SET_COLUMNS_SELECTED', names: ['AMOUNT', 'APPR_MSG', 'EXTRA_MSG'], selected: true },
     { type: 'SET_DECRYPT', name: 'APPR_MSG', policy: 'KDKEY' },
     { type: 'SET_DECRYPT', name: 'EXTRA_MSG', policy: 'PANEN' },
@@ -124,7 +141,7 @@ describe('reducer', () => {
   it('컬럼 재조회 결과에 없는 컬럼의 선택과 복호화 지정은 지운다', () => {
     const after = reducer(ready(), {
       type: 'COLUMNS_LOADED',
-      pkColumn: 'TRX_NO',
+      keyColumn: 'TRX_NO',
       columns: COLUMNS.filter((c) => c.name !== 'APPR_MSG'),
     });
     expect(after.selected).toEqual(['AMOUNT', 'EXTRA_MSG']);
@@ -162,7 +179,15 @@ describe('reducer', () => {
       { type: 'SELECT_PAIR', index: 2 },
       {
         type: 'DETAIL_LOADED',
-        detail: { index: 2, a: 'A2', b: 'B2', status: 'MISMATCH', missing: null, rows: [] },
+        detail: {
+          index: 2,
+          a: 'A2',
+          b: 'B2',
+          status: 'MISMATCH',
+          missing: null,
+          duplicate: null,
+          rows: [],
+        },
       },
     );
     expect(state.job).toBeNull();
@@ -204,6 +229,7 @@ describe('reducer', () => {
       envB: 'prod',
       owner: 'DM_IT_OWNER',
       table: 'DM_IT_TRX_STR',
+      keyColumn: 'TRX_NO',
       columns: [
         { name: 'TRX_NO' },
         { name: 'AMOUNT' },
@@ -213,6 +239,34 @@ describe('reducer', () => {
       pairsText: 'A1,B1',
     });
     expect(buildCompareRequest(initialState)).toBeNull();
-    expect(pkType(state)).toBe('VARCHAR2(20)');
+    expect(keyType(state)).toBe('VARCHAR2(20)');
+  });
+
+  it('비교 키는 컬럼을 받으면 기본값으로 정해지고 keyable 컬럼으로만 바꿀 수 있다(WA-14)', () => {
+    const state = ready();
+    expect(state.keyColumn).toBe('TRX_NO');
+    expect(keyType(state)).toBe('VARCHAR2(20)');
+    const byAmount = reducer(state, { type: 'SET_KEY_COLUMN', keyColumn: 'AMOUNT' });
+    expect(byAmount.keyColumn).toBe('AMOUNT');
+    expect(byAmount.selected).toEqual(state.selected);
+    expect(reducer(state, { type: 'SET_KEY_COLUMN', keyColumn: 'APPR_MSG' })).toBe(state);
+    expect(reducer(state, { type: 'SET_KEY_COLUMN', keyColumn: 'NOPE' })).toBe(state);
+    expect(reducer(state, { type: 'SET_KEY_COLUMN', keyColumn: null }).keyColumn).toBeNull();
+    // 다시 조회한 목록에 고른 키가 있으면 유지하고, 없으면 기본값으로 정한다.
+    expect(
+      reducer(byAmount, { type: 'COLUMNS_LOADED', keyColumn: 'TRX_NO', columns: COLUMNS })
+        .keyColumn,
+    ).toBe('AMOUNT');
+    expect(
+      reducer(byAmount, {
+        type: 'COLUMNS_LOADED',
+        keyColumn: null,
+        columns: COLUMNS.filter((c) => c.name !== 'AMOUNT'),
+      }).keyColumn,
+    ).toBeNull();
+    // 새 테이블을 고르면 비교 키도 초기화된다.
+    expect(
+      reducer(state, { type: 'SELECT_TABLE', table: { owner: 'O', name: 'X' } }).keyColumn,
+    ).toBeNull();
   });
 });

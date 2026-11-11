@@ -1,12 +1,13 @@
 import { ApiError, NetworkError } from './api/client';
 import {
   decryptErrorMessage,
+  duplicateCounts,
+  duplicateMessage,
   errorMessage,
   messages,
   missingMessage,
   pairErrorMessage,
   statusLabels,
-  tableReasonMessage,
 } from './messages';
 
 // FE-01: 화면 정의서(v1.5) 2장·4장의 문구와 글자 단위로 일치하는지 확인한다(문구 스냅샷).
@@ -57,11 +58,7 @@ describe('메시지 맵', () => {
       '조회할 수 있는 테이블이 없습니다. 접속 계정의 조회 권한을 확인해 주세요.',
     );
     expect(messages.noMatchingTables).toBe('검색어와 일치하는 테이블이 없습니다.');
-    expect(tableReasonMessage('NO_PK')).toBe('PK가 없어 비교할 수 없습니다.');
-    expect(tableReasonMessage('COMPOSITE_PK')).toBe('복합 PK 테이블은 지원하지 않습니다.');
-    expect(tableReasonMessage('UNSUPPORTED_PK_TYPE')).toBe(
-      'PK 컬럼 타입을 지원하지 않아 비교할 수 없습니다.',
-    );
+    expect(messages.keyNotSelected).toBe('비교 키 컬럼을 선택해 주세요.');
   });
 
   it('SC-02 연결 실패·타임아웃·중지·서버 통신 불가(WA-10) 문구', () => {
@@ -96,8 +93,19 @@ describe('메시지 맵', () => {
       MATCH: '일치',
       MISMATCH: '불일치',
       MISSING: '누락',
+      DUPLICATE: '키 중복',
       DECRYPT_ERROR: '복호화 오류',
     });
+    const envNameOf = (side: 'A' | 'B') => (side === 'A' ? '테스트' : '운영');
+    expect(duplicateCounts({ a: 2, b: 1 })).toBe('A 2건');
+    expect(duplicateCounts({ a: 2, b: 3 })).toBe('A 2건·B 3건');
+    expect(duplicateCounts({ a: 0, b: 2 })).toBe('B 2건');
+    expect(duplicateMessage({ a: 2, b: 1 }, envNameOf)).toBe(
+      '비교 키 값이 유일하지 않아 비교하지 않았습니다. (A쪽(테스트) 2건)',
+    );
+    expect(duplicateMessage({ a: 2, b: 3 }, envNameOf)).toBe(
+      '비교 키 값이 유일하지 않아 비교하지 않았습니다. (A쪽(테스트) 2건, B쪽(운영) 3건)',
+    );
   });
 
   it('요청 실패를 오류 코드별 문구로 바꾼다', () => {

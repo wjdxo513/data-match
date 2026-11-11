@@ -3,12 +3,13 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { ApiError, NetworkError, api } from './api/client';
 import { ColumnTable } from './components/ColumnTable';
 import { EnvBar } from './components/EnvBar';
+import { KeySelect } from './components/KeySelect';
 import { PairsInput, PairsStatus } from './components/PairsInput';
 import { ProgressModal } from './components/ProgressModal';
 import { ResultView } from './components/ResultView';
 import { TableSearch } from './components/TableSearch';
 import { errorMessage, messages, pairErrorMessage } from './messages';
-import { buildCompareRequest, initialState, pkType, reducer } from './state/reducer';
+import { buildCompareRequest, initialState, keyType, reducer } from './state/reducer';
 import type { Environment, JobStatusResponse, PairErrorReason } from './types';
 import { MAX_PAIRS, isNumericPkType, parsePairs } from './utils/pairsParser';
 
@@ -72,7 +73,7 @@ export default function App() {
       .columns(env, state.table.owner, state.table.name)
       .then((res) => {
         if (!cancelled)
-          dispatch({ type: 'COLUMNS_LOADED', pkColumn: res.pkColumn, columns: res.columns });
+          dispatch({ type: 'COLUMNS_LOADED', keyColumn: res.keyColumn, columns: res.columns });
       })
       .catch((e: unknown) => {
         if (!cancelled) setColumnsError(errorMessage(e, envName(env)));
@@ -86,7 +87,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.columnsStale, state.table, state.envA]);
 
-  const numericPk = isNumericPkType(pkType(state));
+  const numericPk = isNumericPkType(keyType(state));
   const parsed = useMemo(
     () => parsePairs(state.pairsText, numericPk),
     [state.pairsText, numericPk],
@@ -171,6 +172,7 @@ export default function App() {
       setRunMessage(messages.envNotSelected);
       return;
     }
+    if (!state.keyColumn) return setRunMessage(messages.keyNotSelected);
     if (request.columns.length === 0) return setRunMessage(messages.noColumns);
     if (parsed.pairs.length === 0 && parsed.errors.length === 0)
       return setRunMessage(messages.noPairs);
@@ -260,6 +262,13 @@ export default function App() {
             selected={state.table}
             onSelect={(table) => dispatch({ type: 'SELECT_TABLE', table })}
           />
+          {state.table && state.columns.length > 0 && (
+            <KeySelect
+              columns={state.columns}
+              value={state.keyColumn}
+              onChange={(keyColumn) => dispatch({ type: 'SET_KEY_COLUMN', keyColumn })}
+            />
+          )}
           <ColumnTable
             columns={state.columns}
             selected={state.selected}

@@ -37,7 +37,7 @@ class ExcelExporterTest {
 
     private final ExcelExporter exporter = new ExcelExporter();
 
-    private static final TableMetadata TABLE = new TableMetadata("DM_IT_OWNER", "DM_IT_TRX_STR", "TRX_NO", "VARCHAR2",
+    private static final TableMetadata TABLE = new TableMetadata("DM_IT_OWNER", "DM_IT_TRX_STR", List.of("TRX_NO"),
             List.of(new ColumnMeta("TRX_NO", "VARCHAR2", 20, null, null, 20)));
 
     private static CompareTask task(int pairs) {
@@ -45,7 +45,7 @@ class ExcelExporterTest {
         for (int i = 1; i <= pairs; i++) {
             list.add(new TransactionPair(i, "A" + i, "B" + i));
         }
-        return new CompareTask("test", "prod", TABLE,
+        return new CompareTask("test", "prod", TABLE, "TRX_NO",
                 List.of(ColumnSpec.plain("AMOUNT"), ColumnSpec.decrypted("APPR_MSG", DecryptPolicy.KDKEY)), list, "2026-11-10T15:15:30");
     }
 
@@ -60,7 +60,8 @@ class ExcelExporterTest {
                         FieldResultTestFactory.decryptError("APPR_MSG", DecryptErrorCause.JSON_INVALID, Side.B)), 3),
                 new PairResult(3, "A3", "B3", PairStatus.MISSING, MissingSide.B, List.of(), 0),
                 new PairResult(4, "A4", "B4", PairStatus.MISSING, MissingSide.A, List.of(), 0),
-                new PairResult(5, "A5", "B5", PairStatus.MISSING, MissingSide.BOTH, List.of(), 0));
+                new PairResult(5, "A5", "B5", PairStatus.MISSING, MissingSide.BOTH, List.of(), 0),
+                PairResult.duplicate(6, new TransactionPair(6, "A6", "B6"), 2, 3));
     }
 
     private static XSSFWorkbook read(byte[] bytes) throws Exception {
@@ -80,19 +81,21 @@ class ExcelExporterTest {
             XSSFSheet s = wb.getSheet("요약");
             String[][] expected = {
                 {"A쪽 환경", "테스트(test)"}, {"B쪽 환경", "운영(prod)"}, {"테이블", "DM_IT_OWNER.DM_IT_TRX_STR"},
-                {"비교 컬럼", "AMOUNT, APPR_MSG(복호화 KDKEY)"}, {"비교 일시", "2026-11-10 15:15:30"},
-                {"총 쌍", "5"}, {"일치", "1"}, {"불일치", "1"}, {"누락", "3"}};
+                {"비교 키", "TRX_NO"}, {"비교 컬럼", "AMOUNT, APPR_MSG(복호화 KDKEY)"}, {"비교 일시", "2026-11-10 15:15:30"},
+                {"총 쌍", "6"}, {"일치", "1"}, {"불일치", "1"}, {"누락", "3"}, {"키 중복", "1"}};
             for (int i = 0; i < expected.length; i++) {
                 assertThat(text(s, i, 0)).isEqualTo(expected[i][0]);
                 assertThat(text(s, i, 1)).isEqualTo(expected[i][1]);
             }
-            assertThat(text(s, 10, 0)).isEqualTo("순번");
-            assertThat(text(s, 10, 5)).isEqualTo("비고");
-            assertThat(text(s, 12, 3)).isEqualTo("불일치");
-            assertThat(text(s, 12, 4)).isEqualTo("3");
-            assertThat(text(s, 12, 5)).isEqualTo("복호화 오류 포함");
-            assertThat(text(s, 13, 3)).isEqualTo("누락(B 없음)");
-            assertThat(text(s, 15, 5)).isEqualTo("A·B 모두 없음");
+            assertThat(text(s, 12, 0)).isEqualTo("순번");
+            assertThat(text(s, 12, 5)).isEqualTo("비고");
+            assertThat(text(s, 14, 3)).isEqualTo("불일치");
+            assertThat(text(s, 14, 4)).isEqualTo("3");
+            assertThat(text(s, 14, 5)).isEqualTo("복호화 오류 포함");
+            assertThat(text(s, 15, 3)).isEqualTo("누락(B 없음)");
+            assertThat(text(s, 17, 5)).isEqualTo("A·B 모두 없음");
+            assertThat(text(s, 18, 3)).isEqualTo("키 중복(A 2건·B 3건)");
+            assertThat(text(s, 18, 5)).isEqualTo("키 중복 A 2건·B 3건");
         }
     }
 
@@ -102,8 +105,8 @@ class ExcelExporterTest {
             XSSFSheet d = wb.getSheet("상세");
             assertThat(text(d, 0, 4)).isEqualTo("A값(테스트)");
             assertThat(text(d, 0, 5)).isEqualTo("B값(운영)");
-            // 결과 행 수: 일치 1 + 불일치 3 + 누락 3 = 7 (머리글 제외)
-            assertThat(d.getLastRowNum()).isEqualTo(7);
+            // 결과 행 수: 일치 1 + 불일치 3 + 누락 3 + 키 중복 1 = 8 (머리글 제외)
+            assertThat(d.getLastRowNum()).isEqualTo(8);
             assertThat(text(d, 1, 6)).isEqualTo("일치");
             assertThat(text(d, 2, 6)).isEqualTo("불일치");
             assertThat(text(d, 3, 5)).isEqualTo("(NULL)");
@@ -111,6 +114,8 @@ class ExcelExporterTest {
             assertThat(text(d, 5, 6)).isEqualTo("누락(B 없음)");
             assertThat(text(d, 6, 6)).isEqualTo("누락(A 없음)");
             assertThat(text(d, 7, 6)).isEqualTo("누락(A·B 모두 없음)");
+            assertThat(text(d, 8, 6)).isEqualTo("키 중복(A 2건·B 3건)");
+            assertThat(d.getRow(8).getCell(6).getCellStyle().getFillForegroundXSSFColor().getRGB()).isEqualTo(ExcelExporter.MISSING_FILL);
 
             XSSFCellStyle match = d.getRow(1).getCell(6).getCellStyle();
             XSSFCellStyle mismatch = d.getRow(2).getCell(6).getCellStyle();
@@ -147,8 +152,8 @@ class ExcelExporterTest {
     @Test
     void fileNameFollowsRule() {
         assertThat(exporter.fileName(task(1))).isEqualTo("datamatch_test-prod_DM_IT_TRX_STR_20261110-151530.xlsx");
-        TableMetadata odd = new TableMetadata("O", "거래/테이블 1", "TRX_NO", "VARCHAR2", TABLE.getColumns());
-        CompareTask t = new CompareTask("dev", "prod", odd, List.of(ColumnSpec.plain("TRX_NO")),
+        TableMetadata odd = new TableMetadata("O", "거래/테이블 1", List.of("TRX_NO"), TABLE.getColumns());
+        CompareTask t = new CompareTask("dev", "prod", odd, "TRX_NO", List.of(ColumnSpec.plain("TRX_NO")),
                 List.of(new TransactionPair(1, "A", "B")), "2026-01-02T03:04:05");
         assertThat(exporter.fileName(t)).isEqualTo("datamatch_dev-prod_거래_테이블_1_20260102-030405.xlsx");
     }

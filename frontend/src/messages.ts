@@ -3,10 +3,10 @@
 import { ApiError, NetworkError } from './api/client';
 import type {
   DecryptErrorCause,
+  DuplicateCount,
   MissingSide,
   PairErrorReason,
   Side,
-  TableUnsupportedReason,
 } from './types';
 import { MAX_PAIRS } from './utils/pairsParser';
 
@@ -17,6 +17,7 @@ export const messages = {
   envNotSelected: 'A쪽과 B쪽 환경을 모두 선택해 주세요.',
   noColumns: '비교할 컬럼을 하나 이상 선택해 주세요.',
   noPairs: '거래번호를 입력해 주세요.',
+  keyNotSelected: '비교 키 컬럼을 선택해 주세요.',
   inputHasErrors: '입력 형식 오류가 있어 비교를 시작할 수 없습니다. 표시된 줄을 수정해 주세요.',
   pairLimitExceeded: (n: number) =>
     `입력한 거래 쌍이 ${count(MAX_PAIRS)}건을 초과했습니다(현재 ${count(n)}쌍). ${count(MAX_PAIRS)}쌍 이하로 나누어 입력해 주세요.`,
@@ -66,17 +67,6 @@ export function pairErrorMessage(line: number, reason: PairErrorReason, side: Si
   }
 }
 
-export function tableReasonMessage(reason: TableUnsupportedReason): string {
-  switch (reason) {
-    case 'NO_PK':
-      return 'PK가 없어 비교할 수 없습니다.';
-    case 'COMPOSITE_PK':
-      return '복합 PK 테이블은 지원하지 않습니다.';
-    case 'UNSUPPORTED_PK_TYPE':
-      return 'PK 컬럼 타입을 지원하지 않아 비교할 수 없습니다.';
-  }
-}
-
 export function decryptErrorMessage(cause: DecryptErrorCause | null): string {
   return cause === 'JSON_INVALID' || cause === 'JSON_NOT_OBJECT'
     ? '복호화 오류: 복호화 결과를 JSON으로 읽을 수 없습니다.'
@@ -89,11 +79,28 @@ export function missingMessage(missing: MissingSide, envNameOf: (side: Side) => 
     : messages.missingSide(missing, envNameOf(missing));
 }
 
+/** 2건 이상 조회된 쪽과 건수: "A 2건", "A 2건·B 3건"(화면 정의서 SC03-04). */
+export function duplicateCounts(dup: DuplicateCount): string {
+  const parts: string[] = [];
+  if (dup.a > 1) parts.push(`A ${dup.a}건`);
+  if (dup.b > 1) parts.push(`B ${dup.b}건`);
+  return parts.join('·');
+}
+
+/** 키 중복 상세 안내(화면 정의서 SC-03 오류 표, SN-E04-7). */
+export function duplicateMessage(dup: DuplicateCount, envNameOf: (side: Side) => string): string {
+  const parts: string[] = [];
+  if (dup.a > 1) parts.push(`A쪽(${envNameOf('A')}) ${dup.a}건`);
+  if (dup.b > 1) parts.push(`B쪽(${envNameOf('B')}) ${dup.b}건`);
+  return `비교 키 값이 유일하지 않아 비교하지 않았습니다. (${parts.join(', ')})`;
+}
+
 /** 판정·상태 텍스트 라벨(화면 정의서 4장). */
 export const statusLabels = {
   MATCH: '일치',
   MISMATCH: '불일치',
   MISSING: '누락',
+  DUPLICATE: '키 중복',
   DECRYPT_ERROR: '복호화 오류',
 } as const;
 

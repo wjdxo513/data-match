@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { COLLAPSE_LENGTH } from './components/ResultView';
 import {
+  DETAILS,
   LONG_VALUE,
   SUMMARY,
   check,
@@ -82,7 +83,7 @@ describe('SC-03 결과 화면', () => {
       '총 5쌍 · 일치 1 · 불일치 1 · 누락 3',
     );
     expect(screen.getByTestId('result-condition')).toHaveTextContent(
-      'A 테스트B 운영DM_IT_OWNER.DM_IT_TRX_STR · 비교 컬럼 2개',
+      'A 테스트B 운영DM_IT_OWNER.DM_IT_TRX_STR · 비교 키 TRX_NO · 비교 컬럼 2개',
     );
   });
 
@@ -218,5 +219,59 @@ describe('SC-03 결과 화면', () => {
     expect(screen.queryByText(/불일치만/)).not.toBeInTheDocument();
     expect(screen.queryByText(/설정 저장/)).not.toBeInTheDocument();
     expect(screen.queryByText(/업로드/)).not.toBeInTheDocument();
+  });
+
+  it('키 중복 짝은 건수 라벨(호박색)과 안내를 표시하고 비교 표를 표시하지 않는다(SN-E04-7)', async () => {
+    mockedApi.summary.mockResolvedValue({
+      ...SUMMARY,
+      counts: { total: 2, match: 1, mismatch: 0, missing: 0, duplicate: 1 },
+      items: [
+        {
+          index: 1,
+          a: 'A1',
+          b: 'B1',
+          status: 'MATCH',
+          mismatchCount: 0,
+          missing: null,
+          duplicate: null,
+        },
+        {
+          index: 2,
+          a: 'C2',
+          b: 'C2',
+          status: 'DUPLICATE',
+          mismatchCount: 0,
+          missing: null,
+          duplicate: { a: 2, b: 3 },
+        },
+      ],
+    });
+    mockedApi.pairDetail.mockImplementation((_job: string, index: number) =>
+      Promise.resolve(
+        index === 1
+          ? DETAILS[1]
+          : {
+              index: 2,
+              a: 'C2',
+              b: 'C2',
+              status: 'DUPLICATE',
+              missing: null,
+              duplicate: { a: 2, b: 3 },
+              rows: [],
+            },
+      ),
+    );
+    await renderWithResult();
+    expect(screen.getByTestId('result-counts')).toHaveTextContent('키 중복 1');
+    const pill = items()[1].querySelector('.pill')!;
+    expect(pill).toHaveTextContent('키 중복(A 2건·B 3건)');
+    expect(pill).toHaveClass('missing');
+    selectPair(2);
+    expect(
+      await screen.findByText(
+        '비교 키 값이 유일하지 않아 비교하지 않았습니다. (A쪽(테스트) 2건, B쪽(운영) 3건)',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: '상세 비교' })).not.toBeInTheDocument();
   });
 });

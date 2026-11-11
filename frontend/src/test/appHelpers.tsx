@@ -13,24 +13,18 @@ export const ENVS: Environment[] = [
   { id: 'prod', name: '운영', production: true },
 ];
 
-export const TABLE: TableCandidate = {
-  owner: 'DM_IT_OWNER',
-  name: 'DM_IT_TRX_STR',
-  selectable: true,
-  reason: null,
-  pkColumn: 'TRX_NO',
-};
+export const TABLE: TableCandidate = { owner: 'DM_IT_OWNER', name: 'DM_IT_TRX_STR' };
 
 export const COLUMNS: ColumnInfo[] = [
-  { name: 'TRX_NO', type: 'VARCHAR2(20)', pk: true, clob: false },
-  { name: 'ORDER_NO', type: 'VARCHAR2(40)', pk: false, clob: false },
-  { name: 'AMOUNT', type: 'NUMBER(12)', pk: false, clob: false },
-  { name: 'APPR_MSG', type: 'CLOB', pk: false, clob: true },
+  { name: 'TRX_NO', type: 'VARCHAR2(20)', pk: true, clob: false, keyable: true },
+  { name: 'ORDER_NO', type: 'VARCHAR2(40)', pk: false, clob: false, keyable: true },
+  { name: 'AMOUNT', type: 'NUMBER(12)', pk: false, clob: false, keyable: true },
+  { name: 'APPR_MSG', type: 'CLOB', pk: false, clob: true, keyable: false },
 ];
 
 export const NUM_COLUMNS: ColumnInfo[] = [
-  { name: 'TRX_ID', type: 'NUMBER(15)', pk: true, clob: false },
-  { name: 'AMOUNT', type: 'NUMBER(12,2)', pk: false, clob: false },
+  { name: 'TRX_ID', type: 'NUMBER(15)', pk: true, clob: false, keyable: true },
+  { name: 'AMOUNT', type: 'NUMBER(12,2)', pk: false, clob: false, keyable: true },
 ];
 
 export const SUMMARY: CompareSummary = {
@@ -39,16 +33,57 @@ export const SUMMARY: CompareSummary = {
     envB: 'prod',
     owner: 'DM_IT_OWNER',
     table: 'DM_IT_TRX_STR',
+    keyColumn: 'TRX_NO',
     columns: [{ name: 'AMOUNT' }, { name: 'APPR_MSG', decrypt: 'KDKEY' }],
     comparedAt: '2026-11-10T10:00:00',
   },
-  counts: { total: 5, match: 1, mismatch: 1, missing: 3 },
+  counts: { total: 5, match: 1, mismatch: 1, missing: 3, duplicate: 0 },
   items: [
-    { index: 1, a: 'A1', b: 'B1', status: 'MATCH', mismatchCount: 0, missing: null },
-    { index: 2, a: 'A2', b: 'B2', status: 'MISMATCH', mismatchCount: 3, missing: null },
-    { index: 3, a: 'A3', b: 'B3', status: 'MISSING', mismatchCount: 0, missing: 'B' },
-    { index: 4, a: 'A4', b: 'B4', status: 'MISSING', mismatchCount: 0, missing: 'A' },
-    { index: 5, a: 'A5', b: 'B5', status: 'MISSING', mismatchCount: 0, missing: 'BOTH' },
+    {
+      index: 1,
+      a: 'A1',
+      b: 'B1',
+      status: 'MATCH',
+      mismatchCount: 0,
+      missing: null,
+      duplicate: null,
+    },
+    {
+      index: 2,
+      a: 'A2',
+      b: 'B2',
+      status: 'MISMATCH',
+      mismatchCount: 3,
+      missing: null,
+      duplicate: null,
+    },
+    {
+      index: 3,
+      a: 'A3',
+      b: 'B3',
+      status: 'MISSING',
+      mismatchCount: 0,
+      missing: 'B',
+      duplicate: null,
+    },
+    {
+      index: 4,
+      a: 'A4',
+      b: 'B4',
+      status: 'MISSING',
+      mismatchCount: 0,
+      missing: 'A',
+      duplicate: null,
+    },
+    {
+      index: 5,
+      a: 'A5',
+      b: 'B5',
+      status: 'MISSING',
+      mismatchCount: 0,
+      missing: 'BOTH',
+      duplicate: null,
+    },
   ],
 };
 
@@ -61,6 +96,7 @@ export const DETAILS: Record<number, PairDetail> = {
     b: 'B1',
     status: 'MATCH',
     missing: null,
+    duplicate: null,
     rows: [{ name: 'AMOUNT', a: '100', b: '100', status: 'MATCH', message: null }],
   },
   2: {
@@ -69,6 +105,7 @@ export const DETAILS: Record<number, PairDetail> = {
     b: 'B2',
     status: 'MISMATCH',
     missing: null,
+    duplicate: null,
     rows: [
       { name: 'AMOUNT', a: '100', b: '200', status: 'MISMATCH', message: null },
       { name: 'APPR_MSG.memo', a: null, b: LONG_VALUE, status: 'MISMATCH', message: null },
@@ -76,16 +113,16 @@ export const DETAILS: Record<number, PairDetail> = {
       { name: 'CARD_ENC', a: null, b: null, status: 'DECRYPT_ERROR', message: 'DECRYPT_FAILED' },
     ],
   },
-  3: { index: 3, a: 'A3', b: 'B3', status: 'MISSING', missing: 'B', rows: [] },
-  4: { index: 4, a: 'A4', b: 'B4', status: 'MISSING', missing: 'A', rows: [] },
-  5: { index: 5, a: 'A5', b: 'B5', status: 'MISSING', missing: 'BOTH', rows: [] },
+  3: { index: 3, a: 'A3', b: 'B3', status: 'MISSING', missing: 'B', duplicate: null, rows: [] },
+  4: { index: 4, a: 'A4', b: 'B4', status: 'MISSING', missing: 'A', duplicate: null, rows: [] },
+  5: { index: 5, a: 'A5', b: 'B5', status: 'MISSING', missing: 'BOTH', duplicate: null, rows: [] },
 };
 
 export function resetApi() {
   Object.values(mockedApi).forEach((fn) => fn.mockReset());
   mockedApi.environments.mockResolvedValue(ENVS);
   mockedApi.searchTables.mockResolvedValue({ items: [TABLE], truncated: false });
-  mockedApi.columns.mockResolvedValue({ pkColumn: 'TRX_NO', columns: COLUMNS });
+  mockedApi.columns.mockResolvedValue({ keyColumn: 'TRX_NO', columns: COLUMNS });
   mockedApi.pairDetail.mockImplementation((_job: string, index: number) =>
     Promise.resolve(DETAILS[index]),
   );

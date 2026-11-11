@@ -13,7 +13,6 @@ import type {
 export interface SelectedTable {
   owner: string;
   name: string;
-  pkColumn: string | null;
 }
 
 export interface JobState {
@@ -28,7 +27,8 @@ export interface AppState {
   envB: string | null;
   table: SelectedTable | null;
   columns: ColumnInfo[];
-  pkColumn: string | null;
+  /** 비교 키 컬럼(SC01-05). 단일 PK면 기본값, 복합 PK·PK 없음이면 사용자가 고른다(PRD PA-10). */
+  keyColumn: string | null;
   /** 컬럼 재조회가 필요하면 true(A쪽 환경 변경 또는 새 테이블 선택, WA-05). 컬럼을 받으면 false. */
   columnsStale: boolean;
   /** 선택한 컬럼명. 요청은 컬럼 목록 순서로 만든다. */
@@ -47,7 +47,7 @@ export const initialState: AppState = {
   envB: null,
   table: null,
   columns: [],
-  pkColumn: null,
+  keyColumn: null,
   columnsStale: false,
   selected: [],
   decrypt: {},
@@ -62,7 +62,8 @@ export type Action =
   | { type: 'SET_ENV_A'; env: string | null }
   | { type: 'SET_ENV_B'; env: string | null }
   | { type: 'SELECT_TABLE'; table: TableCandidate }
-  | { type: 'COLUMNS_LOADED'; pkColumn: string; columns: ColumnInfo[] }
+  | { type: 'COLUMNS_LOADED'; keyColumn: string | null; columns: ColumnInfo[] }
+  | { type: 'SET_KEY_COLUMN'; keyColumn: string | null }
   | { type: 'SET_COLUMN_SELECTED'; name: string; selected: boolean }
   | { type: 'SET_COLUMNS_SELECTED'; names: string[]; selected: boolean }
   | { type: 'SET_DECRYPT'; name: string; policy: DecryptPolicy | null }
@@ -76,6 +77,9 @@ export type Action =
 
 const isClob = (columns: ColumnInfo[], name: string) =>
   columns.some((c) => c.name === name && c.clob);
+
+const isKeyable = (columns: ColumnInfo[], name: string | null) =>
+  name !== null && columns.some((c) => c.name === name && c.keyable);
 
 function withoutKeys(
   map: Record<string, DecryptPolicy>,
@@ -99,13 +103,9 @@ export function reducer(state: AppState, action: Action): AppState {
       // 새 테이블을 고르면 컬럼 선택과 복호화 지정을 초기화한다(화면 정의서 4장).
       return {
         ...state,
-        table: {
-          owner: action.table.owner,
-          name: action.table.name,
-          pkColumn: action.table.pkColumn,
-        },
+        table: { owner: action.table.owner, name: action.table.name },
         columns: [],
-        pkColumn: null,
+        keyColumn: null,
         columnsStale: true,
         selected: [],
         decrypt: {},
@@ -114,10 +114,14 @@ export function reducer(state: AppState, action: Action): AppState {
       // 재조회 결과에 없는 컬럼, CLOB이 아니게 된 컬럼의 선택·복호화 지정은 지운다.
       const names = new Set(action.columns.map((c) => c.name));
       const selected = state.selected.filter((n) => names.has(n));
+      // 고른 비교 키가 새 목록에서도 쓸 수 있으면 유지하고, 아니면 기본값으로 정한다(WA-14).
+      const keyColumn = isKeyable(action.columns, state.keyColumn)
+        ? state.keyColumn
+        : action.keyColumn;
       return {
         ...state,
         columns: action.columns,
-        pkColumn: action.pkColumn,
+        keyColumn,
         columnsStale: false,
         selected,
         decrypt: withoutKeys(
@@ -126,6 +130,10 @@ export function reducer(state: AppState, action: Action): AppState {
         ),
       };
     }
+    case 'SET_KEY_COLUMN':
+      // 비교 키는 keyable 컬럼만 고를 수 있고, 바꿔도 컬럼 선택·복호화 지정은 유지한다(WA-14).
+      if (action.keyColumn !== null && !isKeyable(state.columns, action.keyColumn)) return state;
+      return { ...state, keyColumn: action.keyColumn };
     case 'SET_COLUMN_SELECTED':
       return setSelected(state, [action.name], action.selected);
     case 'SET_COLUMNS_SELECTED':
@@ -202,6 +210,7 @@ export function buildCompareRequest(state: AppState): CompareRequest | null {
     envB: state.envB,
     owner: state.table.owner,
     table: state.table.name,
+    keyColumn: state.keyColumn ?? '',
     columns: state.columns
       .filter((c) => state.selected.includes(c.name))
       .map((c) =>
@@ -213,7 +222,7 @@ export function buildCompareRequest(state: AppState): CompareRequest | null {
   };
 }
 
-/** PK 컬럼 타입(숫자 PK 검사용, PA-19). */
-export function pkType(state: AppState): string | null {
-  return state.columns.find((c) => c.name === state.pkColumn)?.type ?? null;
+/** 비교 키 컬럼 타입(숫자 비교 키 검사용, PA-19). */
+export function keyType(state: AppState): string | null {
+  return state.columns.find((c) => c.name === state.keyColumn)?.type ?? null;
 }

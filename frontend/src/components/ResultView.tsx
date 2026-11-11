@@ -1,6 +1,12 @@
 // FE-04: 비교 결과(SC-03). 비교 당시 조건을 서버 결과 그대로 표시하고(SA-09), 상세는 선택 시 조회한 값을 쓴다(TD-15).
 import { useState } from 'react';
-import { decryptErrorMessage, missingMessage, statusLabels } from '../messages';
+import {
+  decryptErrorMessage,
+  duplicateCounts,
+  duplicateMessage,
+  missingMessage,
+  statusLabels,
+} from '../messages';
 import type {
   CompareSummary,
   DetailRow,
@@ -30,9 +36,14 @@ function missingLabel(missing: MissingSide | null): string {
   return `누락(${missing} 없음)`;
 }
 
-export function pairLabel(item: Pick<SummaryItem, 'status' | 'mismatchCount' | 'missing'>): string {
+export function pairLabel(
+  item: Pick<SummaryItem, 'status' | 'mismatchCount' | 'missing' | 'duplicate'>,
+): string {
   if (item.status === 'MATCH') return statusLabels.MATCH;
   if (item.status === 'MISMATCH') return `${statusLabels.MISMATCH}(${item.mismatchCount})`;
+  if (item.status === 'DUPLICATE' && item.duplicate) {
+    return `${statusLabels.DUPLICATE}(${duplicateCounts(item.duplicate)})`;
+  }
   return missingLabel(item.missing);
 }
 
@@ -40,6 +51,7 @@ const pillClass = {
   MATCH: 'pill match',
   MISMATCH: 'pill mismatch',
   MISSING: 'pill missing',
+  DUPLICATE: 'pill missing',
 } as const;
 
 function Value({ value }: { value: string | null }) {
@@ -129,11 +141,12 @@ export function ResultView(props: Props) {
       <div className="cond" data-testid="result-condition">
         <span className="a">A {sideName('A')}</span>
         <span className="b">B {sideName('B')}</span>
-        {condition.owner}.{condition.table} · 비교 컬럼 {condition.columns.length}개
+        {condition.owner}.{condition.table} · 비교 키 {condition.keyColumn} · 비교 컬럼{' '}
+        {condition.columns.length}개
       </div>
       <div className="summary" data-testid="result-counts">
         총 <b>{counts.total}</b>쌍 · 일치 <b>{counts.match}</b> · 불일치 <b>{counts.mismatch}</b> ·
-        누락 <b>{counts.missing}</b>
+        누락 <b>{counts.missing}</b> · 키 중복 <b>{counts.duplicate}</b>
       </div>
       <div className="result-split">
         <div className="list" role="listbox" aria-label="요약 목록">
@@ -169,7 +182,12 @@ export function ResultView(props: Props) {
               {missingMessage(detail.missing, sideName)}
             </div>
           )}
-          {detail && detail.status !== 'MISSING' && (
+          {detail && detail.status === 'DUPLICATE' && detail.duplicate && (
+            <div className="missing-note" role="status">
+              {duplicateMessage(detail.duplicate, sideName)}
+            </div>
+          )}
+          {detail && detail.status !== 'MISSING' && detail.status !== 'DUPLICATE' && (
             <DetailTable detail={detail} envName={sideName} />
           )}
         </div>

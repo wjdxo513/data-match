@@ -75,19 +75,37 @@ class MetadataControllerTest {
     }
 
     @Test
-    void searchReturnsCandidatesWithReasons() throws Exception {
+    void searchReturnsOwnerAndNameOnly() throws Exception {
         when(repository.searchTables("test", "%TB%", 31)).thenReturn(List.of(new TableName("O", "TB_A"), new TableName("O", "TB_B")));
-        when(repository.findPrimaryKeys("test", List.of(new TableName("O", "TB_A"), new TableName("O", "TB_B"))))
-                .thenReturn(Map.of(new TableName("O", "TB_A"), List.of(new PkColumn("ID", "VARCHAR2"))));
         mvc.perform(get("/api/tables").param("env", "test").param("q", "tb").header("Host", "localhost"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.truncated").value(false))
                 .andExpect(jsonPath("$.items[0].owner").value("O"))
                 .andExpect(jsonPath("$.items[0].name").value("TB_A"))
-                .andExpect(jsonPath("$.items[0].selectable").value(true))
-                .andExpect(jsonPath("$.items[0].pkColumn").value("ID"))
-                .andExpect(jsonPath("$.items[1].selectable").value(false))
-                .andExpect(jsonPath("$.items[1].reason").value("NO_PK"));
+                .andExpect(jsonPath("$.items[1].name").value("TB_B"))
+                .andExpect(jsonPath("$.items[0].selectable").doesNotExist())
+                .andExpect(jsonPath("$.items[0].reason").doesNotExist());
+    }
+
+    @Test
+    void compositePkColumnsHaveNoDefaultKeyAndMarkAllPkColumns() throws Exception {
+        TableName t = new TableName("O", "TB_C");
+        when(repository.findColumns("test", t)).thenReturn(List.of(
+                new ColumnMeta("CONTROL_NO", "VARCHAR2", 20, null, null, 20),
+                new ColumnMeta("SEQ", "NUMBER", 22, 5, 0, 0),
+                new ColumnMeta("REG_DT", "DATE", 7, null, null, 0)));
+        when(repository.findPrimaryKeys("test", List.of(t))).thenReturn(Map.of(t,
+                List.of(new PkColumn("CONTROL_NO", "VARCHAR2"), new PkColumn("SEQ", "NUMBER"))));
+        mvc.perform(get("/api/tables/columns").param("env", "test").param("owner", "O").param("table", "TB_C")
+                        .header("Host", "localhost"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.keyColumn").isEmpty())
+                .andExpect(jsonPath("$.columns[0].pk").value(true))
+                .andExpect(jsonPath("$.columns[1].pk").value(true))
+                .andExpect(jsonPath("$.columns[2].pk").value(false))
+                .andExpect(jsonPath("$.columns[0].keyable").value(true))
+                .andExpect(jsonPath("$.columns[1].keyable").value(true))
+                .andExpect(jsonPath("$.columns[2].keyable").value(false));
     }
 
     @Test
@@ -101,7 +119,7 @@ class MetadataControllerTest {
         mvc.perform(get("/api/tables/columns").param("env", "test").param("owner", "O").param("table", "TB_A")
                         .header("Host", "localhost"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.pkColumn").value("ID"))
+                .andExpect(jsonPath("$.keyColumn").value("ID"))
                 .andExpect(jsonPath("$.columns.length()").value(3))
                 .andExpect(jsonPath("$.columns[0].name").value("ID"))
                 .andExpect(jsonPath("$.columns[0].type").value("VARCHAR2(20)"))
@@ -110,6 +128,8 @@ class MetadataControllerTest {
                 .andExpect(jsonPath("$.columns[1].type").value("NUMBER(15,2)"))
                 .andExpect(jsonPath("$.columns[1].pk").value(false))
                 .andExpect(jsonPath("$.columns[2].clob").value(true))
+                .andExpect(jsonPath("$.columns[2].keyable").value(false))
+                .andExpect(jsonPath("$.columns[1].keyable").value(true))
                 .andExpect(jsonPath("$.columns[0].dataType").doesNotExist());
     }
 

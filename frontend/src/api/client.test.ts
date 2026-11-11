@@ -31,6 +31,7 @@ describe('API 클라이언트', () => {
       envB: 'prod',
       owner: 'O',
       table: 'T',
+      keyColumn: 'ID',
       columns: [{ name: 'C' }],
       pairsText: 'A1,B1',
     };
@@ -70,6 +71,7 @@ describe('API 클라이언트', () => {
         envB: 'b',
         owner: 'o',
         table: 't',
+        keyColumn: 'ID',
         columns: [],
         pairsText: 'bad',
       })

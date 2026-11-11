@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * 테이블 검색과 컬럼·PK 조회(기술 설계서 5장 FR-02·03, 6.2절, TD-07). 메타데이터는 항상 A쪽 환경에서 조회한다(PA-15).
+ * 테이블 검색과 컬럼·PK·비교 키 조회(기술 설계서 5장 FR-02·03, 6.2절, TD-07). 메타데이터는 항상 A쪽 환경에서 조회한다(PA-15).
  * 전체 메타데이터를 캐시하지 않는다.
  */
 @Service
@@ -43,12 +43,10 @@ public class MetadataService {
             List<TableName> rows = repository.searchTables(env, likePattern(q), MAX_CANDIDATES + 1);
             boolean truncated = rows.size() > MAX_CANDIDATES;
             List<TableName> tables = truncated ? rows.subList(0, MAX_CANDIDATES) : rows;
-            Map<TableName, List<PkColumn>> pks = tables.isEmpty() ? Map.of() : repository.findPrimaryKeys(env, tables);
-            List<TableCandidate> items = tables.stream().map(t -> {
-                PkSupport pk = PkSupport.judge(pks.get(t));
-                return new TableCandidate(t.getOwner(), t.getName(), pk.isSelectable(), pk.getReason(),
-                        pk.isSelectable() ? pk.getPkColumn() : null);
-            }).collect(Collectors.toList());
+            // 모든 테이블을 선택할 수 있으므로(PRD PA-10) 후보에는 PK 판정을 하지 않는다.
+            List<TableCandidate> items = tables.stream()
+                    .map(t -> new TableCandidate(t.getOwner(), t.getName()))
+                    .collect(Collectors.toList());
             return new TableSearchResult(items, truncated);
         } catch (SQLException e) {
             throw translate(env, e);
@@ -56,8 +54,8 @@ public class MetadataService {
     }
 
     /**
-     * 비교할 수 있는 테이블의 메타데이터를 조회한다. 메타데이터에 없는(또는 권한이 없는) 테이블은 {@code INVALID_INPUT},
-     * PK가 지원되지 않으면 {@code TABLE_NOT_SUPPORTED}(details.reason)이다.
+     * 테이블의 컬럼과 PK 구성을 조회한다. 메타데이터에 없는(또는 권한이 없는) 테이블은 {@code INVALID_INPUT}이다.
+     * 비교 키 기본값과 검증은 {@link TableMetadata}가 맡는다(PRD PA-10·19).
      */
     public TableMetadata describeTable(String env, String owner, String table) {
         requireEnvironment(env);
@@ -70,12 +68,9 @@ public class MetadataService {
             if (columns.isEmpty()) {
                 throw new DataMatchException(ErrorCode.INVALID_INPUT, "unknown table");
             }
-            PkSupport pk = PkSupport.judge(repository.findPrimaryKeys(env, List.of(name)).get(name));
-            if (!pk.isSelectable()) {
-                throw new DataMatchException(ErrorCode.TABLE_NOT_SUPPORTED, "table not supported",
-                        Map.of("reason", pk.getReason().name()));
-            }
-            return new TableMetadata(owner, table, pk.getPkColumn(), pk.getPkDataType(), List.copyOf(columns));
+            List<PkColumn> pk = repository.findPrimaryKeys(env, List.of(name)).getOrDefault(name, List.of());
+            List<String> pkColumns = pk.stream().map(PkColumn::getName).collect(Collectors.toList());
+            return new TableMetadata(owner, table, pkColumns, List.copyOf(columns));
         } catch (SQLException e) {
             throw translate(env, e);
         }

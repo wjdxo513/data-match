@@ -31,12 +31,12 @@ class JobManagerTest {
     private JobManager manager;
 
     static CompareTask task(int pairs) {
-        TableMetadata t = new TableMetadata("O", "T", "ID", "VARCHAR2", List.of(new ColumnMeta("ID", "VARCHAR2", 10, null, null, 10)));
+        TableMetadata t = new TableMetadata("O", "T", List.of("ID"), List.of(new ColumnMeta("ID", "VARCHAR2", 10, null, null, 10)));
         List<TransactionPair> list = new java.util.ArrayList<>();
         for (int i = 1; i <= pairs; i++) {
             list.add(new TransactionPair(i, "A" + i, "B" + i));
         }
-        return new CompareTask("test", "prod", t, List.of(ColumnSpec.plain("ID")), list, "2026-11-10T10:00:00");
+        return new CompareTask("test", "prod", t, "ID", List.of(ColumnSpec.plain("ID")), list, "2026-11-10T10:00:00");
     }
 
     static List<PairResult> results(int n) {

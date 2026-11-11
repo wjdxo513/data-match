@@ -49,7 +49,7 @@ public class CompareService implements CompareRunner {
     @Override
     public List<PairResult> run(CompareTask task, IntConsumer progress, CancellationToken token) {
         List<String> names = task.getColumns().stream().map(ColumnSpec::getName).collect(Collectors.toList());
-        RowQuery query = SqlBuilder.build(task.getTable(), names);
+        RowQuery query = SqlBuilder.build(task.getTable(), task.getKeyColumn(), names);
         DecryptSession session = cancellable(decryptor.openSession(), token);
         List<TransactionPair> pairs = task.getPairs();
         List<PairResult> results = new ArrayList<>(pairs.size());
@@ -61,14 +61,21 @@ public class CompareService implements CompareRunner {
             }
             long start = System.nanoTime();
             List<TransactionPair> chunk = pairs.subList(from, Math.min(from + chunkSize, pairs.size()));
-            Map<String, Map<String, String>> rowsA = fetch(Side.A, task.getEnvA(), query,
+            Map<String, List<Map<String, String>>> rowsA = fetch(Side.A, task.getEnvA(), query,
                     chunk.stream().map(TransactionPair::getA).collect(Collectors.toList()), token);
-            Map<String, Map<String, String>> rowsB = fetch(Side.B, task.getEnvB(), query,
+            Map<String, List<Map<String, String>>> rowsB = fetch(Side.B, task.getEnvB(), query,
                     chunk.stream().map(TransactionPair::getB).collect(Collectors.toList()), token);
             for (int i = 0; i < chunk.size(); i++) {
                 TransactionPair pair = chunk.get(i);
-                results.add(CompareEngine.compare(from + i + 1, pair, task.getColumns(),
-                        rowsA.get(pair.getA()), rowsB.get(pair.getB()), session));
+                List<Map<String, String>> a = rowsA.getOrDefault(pair.getA(), List.of());
+                List<Map<String, String>> b = rowsB.getOrDefault(pair.getB(), List.of());
+                if (a.size() > 1 || b.size() > 1) {
+                    // 키 중복은 누락보다 먼저 판정하고 컬럼 비교·복호화를 하지 않는다(PRD 6.1, PA-10).
+                    results.add(PairResult.duplicate(from + i + 1, pair, a.size(), b.size()));
+                } else {
+                    results.add(CompareEngine.compare(from + i + 1, pair, task.getColumns(),
+                            a.isEmpty() ? null : a.get(0), b.isEmpty() ? null : b.get(0), session));
+                }
             }
             progress.accept(from + chunk.size());
             log.info("chunk done: envA={}, envB={}, table={}, pairs={}, elapsedMs={}", task.getEnvA(), task.getEnvB(), table,
@@ -80,8 +87,8 @@ public class CompareService implements CompareRunner {
         return results;
     }
 
-    private Map<String, Map<String, String>> fetch(Side side, String env, RowQuery query, List<String> keys,
-                                                   CancellationToken token) {
+    private Map<String, List<Map<String, String>>> fetch(Side side, String env, RowQuery query, List<String> keys,
+                                                         CancellationToken token) {
         try {
             return rowRepository.fetchRows(env, query, new ArrayList<>(new LinkedHashSet<>(keys)), token);
         } catch (DataMatchException e) {

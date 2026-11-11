@@ -13,16 +13,19 @@ public class CompareTask {
     String envA;
     String envB;
     TableMetadata table;
+    /** 비교 키 컬럼(PRD PA-10). 메타데이터로 검증한 이름이다. */
+    String keyColumn;
     List<ColumnSpec> columns;
     List<TransactionPair> pairs;
     /** 비교 일시(ISO-8601, 초 단위). */
     String comparedAt;
 
-    public CompareTask(String envA, String envB, TableMetadata table, List<ColumnSpec> columns,
+    public CompareTask(String envA, String envB, TableMetadata table, String keyColumn, List<ColumnSpec> columns,
                        List<TransactionPair> pairs, String comparedAt) {
         this.envA = envA;
         this.envB = envB;
         this.table = table;
+        this.keyColumn = keyColumn;
         this.columns = List.copyOf(columns);
         this.pairs = List.copyOf(pairs);
         this.comparedAt = comparedAt;

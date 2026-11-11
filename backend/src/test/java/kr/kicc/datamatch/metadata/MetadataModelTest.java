@@ -1,31 +1,55 @@
 package kr.kicc.datamatch.metadata;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
-import kr.kicc.datamatch.metadata.PkSupport.UnsupportedReason;
+import kr.kicc.datamatch.error.DataMatchException;
+import kr.kicc.datamatch.error.ErrorCode;
 import org.junit.jupiter.api.Test;
 
-/** DB-02: PK 판정(PA-10, PA-19)과 타입 표시 문자열. */
+/** DB-02·DB-04: 비교 키 가능 타입과 기본 비교 키(PRD PA-10, PA-19), 타입 표시 문자열. */
 class MetadataModelTest {
 
+    private static ColumnMeta col(String name, String type) {
+        return new ColumnMeta(name, type, null, null, null, null);
+    }
+
     @Test
-    void pkJudgement() {
-        assertThat(PkSupport.judge(null)).isEqualTo(new PkSupport(false, UnsupportedReason.NO_PK, null, null));
-        assertThat(PkSupport.judge(List.of())).isEqualTo(new PkSupport(false, UnsupportedReason.NO_PK, null, null));
-        assertThat(PkSupport.judge(List.of(new PkColumn("A", "VARCHAR2"), new PkColumn("B", "VARCHAR2"))).getReason())
-                .isEqualTo(UnsupportedReason.COMPOSITE_PK);
-        for (String type : new String[] {"DATE", "TIMESTAMP(6)", "RAW", "FLOAT", "CLOB"}) {
-            PkSupport pk = PkSupport.judge(List.of(new PkColumn("K", type)));
-            assertThat(pk.isSelectable()).as(type).isFalse();
-            assertThat(pk.getReason()).as(type).isEqualTo(UnsupportedReason.UNSUPPORTED_PK_TYPE);
-        }
+    void keyableTypesAndDefaultKeyColumn() {
         for (String type : new String[] {"CHAR", "VARCHAR2", "NCHAR", "NVARCHAR2", "NUMBER"}) {
-            PkSupport pk = PkSupport.judge(List.of(new PkColumn("K", type)));
-            assertThat(pk.isSelectable()).as(type).isTrue();
-            assertThat(pk.getPkColumn()).isEqualTo("K");
-            assertThat(pk.getReason()).isNull();
-            assertThat(pk.isNumeric()).isEqualTo("NUMBER".equals(type));
+            assertThat(col("K", type).isKeyable()).as(type).isTrue();
+            TableMetadata single = new TableMetadata("O", "T", List.of("K"), List.of(col("K", type)));
+            assertThat(single.defaultKeyColumn()).as(type).isEqualTo("K");
+        }
+        for (String type : new String[] {"DATE", "TIMESTAMP(6)", "RAW", "FLOAT", "CLOB", "BLOB"}) {
+            assertThat(col("K", type).isKeyable()).as(type).isFalse();
+            TableMetadata unsupported = new TableMetadata("O", "T", List.of("K"), List.of(col("K", type)));
+            assertThat(unsupported.defaultKeyColumn()).as(type).isNull();
+        }
+        TableMetadata composite = new TableMetadata("O", "T", List.of("CONTROL_NO", "SEQ"),
+                List.of(col("CONTROL_NO", "VARCHAR2"), col("SEQ", "NUMBER")));
+        assertThat(composite.defaultKeyColumn()).isNull();
+        assertThat(composite.isPk("CONTROL_NO")).isTrue();
+        assertThat(composite.isPk("SEQ")).isTrue();
+        TableMetadata noPk = new TableMetadata("O", "T", List.of(), List.of(col("ID", "VARCHAR2")));
+        assertThat(noPk.defaultKeyColumn()).isNull();
+        assertThat(noPk.isPk("ID")).isFalse();
+        assertThat(col("N", "NUMBER").isNumber()).isTrue();
+        assertThat(col("N", "VARCHAR2").isNumber()).isFalse();
+    }
+
+    @Test
+    void requireKeyColumnAcceptsOnlyExistingKeyableColumns() {
+        TableMetadata t = new TableMetadata("O", "T", List.of("CONTROL_NO", "D"),
+                List.of(col("CONTROL_NO", "VARCHAR2"), col("D", "DATE"), col("AMT", "NUMBER")));
+        assertThat(t.requireKeyColumn("CONTROL_NO").getName()).isEqualTo("CONTROL_NO");
+        assertThat(t.requireKeyColumn("AMT").getName()).isEqualTo("AMT");
+        for (String bad : new String[] {null, "", " ", "D", "NOPE", "control_no"}) {
+            assertThatThrownBy(() -> t.requireKeyColumn(bad))
+                    .as(String.valueOf(bad))
+                    .isInstanceOf(DataMatchException.class)
+                    .satisfies(e -> assertThat(((DataMatchException) e).code()).isEqualTo(ErrorCode.INVALID_INPUT));
         }
     }
 

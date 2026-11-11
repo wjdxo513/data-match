@@ -29,14 +29,15 @@ public class MetadataController {
     public ColumnsResponse columns(@RequestParam String env, @RequestParam String owner, @RequestParam String table) {
         TableMetadata meta = service.describeTable(env, owner, table);
         List<ColumnResponse> columns = meta.getColumns().stream()
-                .map(c -> new ColumnResponse(c.getName(), c.displayType(), c.getName().equals(meta.getPkColumn()), c.isClob()))
+                .map(c -> new ColumnResponse(c.getName(), c.displayType(), meta.isPk(c.getName()), c.isClob(), c.isKeyable()))
                 .collect(Collectors.toList());
-        return new ColumnsResponse(meta.getPkColumn(), columns);
+        return new ColumnsResponse(meta.defaultKeyColumn(), columns);
     }
 
     @Value
     public static class ColumnsResponse {
-        String pkColumn;
+        /** 기본 비교 키(단일 PK이고 비교 키 가능 타입일 때). 없으면 null(PRD PA-10). */
+        String keyColumn;
         List<ColumnResponse> columns;
     }
 
@@ -46,5 +47,7 @@ public class MetadataController {
         String type;
         boolean pk;
         boolean clob;
+        /** 비교 키로 고를 수 있는지(문자형·NUMBER, PRD PA-19). */
+        boolean keyable;
     }
 }

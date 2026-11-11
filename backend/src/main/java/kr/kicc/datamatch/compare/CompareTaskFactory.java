@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
  *
  * <ol>
  *   <li>A·B 환경 설정 확인({@code ENV_NOT_CONFIGURED})</li>
- *   <li>A쪽 환경 메타데이터로 테이블·PK 확인(없음 {@code INVALID_INPUT}, PK 미지원 {@code TABLE_NOT_SUPPORTED})</li>
+ *   <li>A쪽 환경 메타데이터로 테이블과 비교 키 확인(없는 테이블, 없거나 문자형·NUMBER가 아닌 비교 키는 {@code INVALID_INPUT})</li>
  *   <li>컬럼 존재·중복, 복호화 대상이 CLOB인지 확인({@code INVALID_INPUT})</li>
  *   <li>거래번호 입력 검증(오류 줄 목록, 1,000쌍 초과, 빈 입력은 {@code INVALID_INPUT})</li>
  * </ol>
@@ -39,7 +39,8 @@ public class CompareTaskFactory {
         this.metadata = metadata;
     }
 
-    public CompareTask create(String envA, String envB, String owner, String table, List<ColumnSpec> columns, String pairsText) {
+    public CompareTask create(String envA, String envB, String owner, String table, String keyColumn,
+                              List<ColumnSpec> columns, String pairsText) {
         for (String env : new String[] {envA, envB}) {
             if (!registry.isAvailable(env)) {
                 throw new DataMatchException(ErrorCode.ENV_NOT_CONFIGURED, "environment not configured");
@@ -49,6 +50,7 @@ public class CompareTaskFactory {
             throw new DataMatchException(ErrorCode.INVALID_INPUT, "no columns selected");
         }
         TableMetadata meta = metadata.describeTable(envA, owner, table);
+        ColumnMeta key = meta.requireKeyColumn(keyColumn);
         List<String> names = columns.stream().map(ColumnSpec::getName).collect(Collectors.toList());
         Set<String> seen = new HashSet<>();
         for (String n : names) {
@@ -64,7 +66,7 @@ public class CompareTaskFactory {
             }
         }
 
-        PairsParseResult parsed = PairsParser.parse(pairsText, meta.isNumericPk());
+        PairsParseResult parsed = PairsParser.parse(pairsText, key.isNumber());
         if (!parsed.getErrors().isEmpty() || parsed.isLimitExceeded()) {
             List<Map<String, Object>> details = new ArrayList<>();
             parsed.getErrors().forEach(e -> details.add(Map.of("line", e.getLine(), "reason", e.getReason().name())));
@@ -76,6 +78,6 @@ public class CompareTaskFactory {
         if (parsed.getPairs().isEmpty()) {
             throw new DataMatchException(ErrorCode.INVALID_INPUT, "no pairs");
         }
-        return new CompareTask(envA, envB, meta, columns, parsed.getPairs(), LocalDateTime.now().format(COMPARED_AT));
+        return new CompareTask(envA, envB, meta, key.getName(), columns, parsed.getPairs(), LocalDateTime.now().format(COMPARED_AT));
     }
 }

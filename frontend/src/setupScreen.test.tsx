@@ -98,35 +98,50 @@ describe('SC-01 설정 화면', () => {
     expect(mockedApi.searchTables).toHaveBeenCalledTimes(3);
   });
 
-  it('선택 불가 테이블은 사유와 함께 표시되고 선택되지 않는다', async () => {
-    mockedApi.searchTables.mockResolvedValue({
-      items: [
-        { owner: 'O', name: 'T_NOPK', selectable: false, reason: 'NO_PK', pkColumn: null },
-        { owner: 'O', name: 'T_COMP', selectable: false, reason: 'COMPOSITE_PK', pkColumn: null },
-        {
-          owner: 'O',
-          name: 'T_DATE',
-          selectable: false,
-          reason: 'UNSUPPORTED_PK_TYPE',
-          pkColumn: null,
-        },
-      ],
-      truncated: false,
-    });
-    await renderApp();
-    selectEnv('A쪽 환경', 'test');
-    fireEvent.change(screen.getByLabelText('테이블 검색'), { target: { value: 'T_' } });
-    const nopk = await screen.findByRole('option', { name: /T_NOPK/ });
-    expect(nopk).toHaveTextContent('PK가 없어 비교할 수 없습니다.');
-    expect(screen.getByRole('option', { name: /T_COMP/ })).toHaveTextContent(
-      '복합 PK 테이블은 지원하지 않습니다.',
+  it('복합 PK 테이블도 선택되고 비교 키를 고르지 않으면 안내만 표시한다(SN-E02-1)', async () => {
+    const COMP_COLUMNS = [
+      { name: 'CONTROL_NO', type: 'VARCHAR2(20)', pk: true, clob: false, keyable: true },
+      { name: 'SEQ', type: 'NUMBER(5)', pk: true, clob: false, keyable: true },
+      { name: 'REG_DT', type: 'DATE', pk: false, clob: false, keyable: false },
+      { name: 'AMOUNT', type: 'NUMBER(12)', pk: false, clob: false, keyable: true },
+    ];
+    mockedApi.columns.mockResolvedValue({ keyColumn: null, columns: COMP_COLUMNS });
+    await renderReady({ owner: 'O', name: 'TB_COMP' });
+    expect(screen.queryByText(/지원하지 않습니다|비교할 수 없습니다/)).not.toBeInTheDocument();
+    const key = screen.getByLabelText('비교 키');
+    expect(key).toHaveValue('');
+    const options = Array.from(key.querySelectorAll('option')).map((o) => o.textContent);
+    expect(options).toEqual(['선택 안 함', 'CONTROL_NO (PK)', 'SEQ (PK)', 'AMOUNT']);
+
+    check('AMOUNT 선택');
+    typePairs('C1,C1');
+    fireEvent.click(runButton());
+    expect(screen.getByRole('alert', { name: '비교 실행 안내' })).toHaveTextContent(
+      '비교 키 컬럼을 선택해 주세요.',
     );
-    expect(screen.getByRole('option', { name: /T_DATE/ })).toHaveTextContent(
-      'PK 컬럼 타입을 지원하지 않아 비교할 수 없습니다.',
+    expect(mockedApi.startCompare).not.toHaveBeenCalled();
+
+    fireEvent.change(key, { target: { value: 'CONTROL_NO' } });
+    expect(screen.getByLabelText('AMOUNT 선택')).toBeChecked();
+    mockedApi.startCompare.mockResolvedValue({ jobId: 'j1', total: 1 });
+    mockedApi.jobStatus.mockReturnValue(new Promise(() => {}));
+    fireEvent.click(runButton());
+    await waitFor(() => expect(mockedApi.startCompare).toHaveBeenCalledTimes(1));
+    expect(mockedApi.startCompare).toHaveBeenCalledWith(
+      expect.objectContaining({ owner: 'O', table: 'TB_COMP', keyColumn: 'CONTROL_NO' }),
     );
-    fireEvent.click(nopk);
-    expect(mockedApi.columns).not.toHaveBeenCalled();
-    expect(screen.queryByText(/선택:/)).not.toBeInTheDocument();
+  });
+
+  it('단일 PK 테이블은 그 PK가 비교 키 기본값이고 숫자 검증은 비교 키 타입을 따른다', async () => {
+    await renderReady();
+    expect(screen.getByLabelText('비교 키')).toHaveValue('TRX_NO');
+    // 문자형 비교 키에서는 숫자 검증을 하지 않는다.
+    typePairs('X1,Y1');
+    expect(screen.queryByRole('alert', { name: '입력 오류' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('비교 키'), { target: { value: 'AMOUNT' } });
+    expect(screen.getByRole('alert', { name: '입력 오류' })).toHaveTextContent(
+      '1번째 줄: 거래번호A는 숫자여야 합니다.',
+    );
   });
 
   it('컬럼 검색과 보이는 컬럼에만 적용되는 전체 선택/해제, 해제 시 복호화 해제', async () => {
@@ -184,8 +199,8 @@ describe('SC-01 설정 화면', () => {
   });
 
   it('NUMBER PK에 숫자가 아닌 거래번호는 WA-12 오류 줄이 되고 비교를 시작하지 않는다', async () => {
-    mockedApi.columns.mockResolvedValue({ pkColumn: 'TRX_ID', columns: NUM_COLUMNS });
-    await renderReady({ ...TABLE, name: 'DM_IT_TRX_NUM', pkColumn: 'TRX_ID' });
+    mockedApi.columns.mockResolvedValue({ keyColumn: 'TRX_ID', columns: NUM_COLUMNS });
+    await renderReady({ ...TABLE, name: 'DM_IT_TRX_NUM' });
     check('AMOUNT 선택');
     typePairs('1,2\n3,X9');
     expect(screen.getByRole('alert', { name: '입력 오류' })).toHaveTextContent(

@@ -13,6 +13,7 @@
 | v1.2 | 2026-11-10 | Claude | 확정 | 개발 진행 중 정리(BE-03 완료 조건의 검사 범위 명확화, PL-04 해결, 기준 기술 설계서 v1.8) |
 | v1.3 | 2026-11-10 | Claude | 확정 | FE-01 수행 중 확인한 가정 PL-14 추가, SETUP-05 권한 오류 코드에 ORA-41900(23ai 이상) 허용 |
 | v1.4 | 2026-11-10 | Claude | 확정 | SafeDB jar의 Git 제외(TD-04 변경)를 SETUP-01에 반영, 기준 기술 설계서 v1.10 |
+| v1.5 | 2026-11-10 | Claude | 확정 | PRD v1.4(비교 키 선택, 키 중복) 반영 Task DB-04, BE-08, FE-05, INT-05 추가 |
 
 ## 변경 이력
 
@@ -27,10 +28,11 @@
 | v1.2 | 2026-11-10 | 7장(BE-03), 13장(PL-04), 머리말 | 수정 | BE-03의 import 검사 대상을 순수 비교 로직 파일로 명확히 함(DB-03의 DB 접근 클래스는 기술 설계서 4.1에 따라 같은 compare 패키지에 위치), PL-04를 BE-01 결과로 해결, 기준 기술 설계서를 v1.8로 갱신. Task 체크박스와 검증 기록 갱신은 버전 이력에 따로 적지 않음 | Claude |
 | v1.3 | 2026-11-10 | 5장(SETUP-05), 13장(PL-14) | 추가 | 로컬 Oracle 26ai가 권한 부족에 ORA-41900을 반환하므로 SETUP-05 완료 조건이 ORA-01031과 함께 허용하도록 수정. 화면 정의서에 문구가 없는 오류 코드는 공통 안내 문구로 표시하고, 상세 응답 `rows[].message`에 복호화 오류 원인 코드를 담는다는 가정을 추가(BE-05가 따름) | Claude |
 | v1.4 | 2026-11-10 | 5장(SETUP-01), 머리말 | 수정 | 원격 저장소가 공개 저장소이므로 SafeDB jar 9개를 Git에서 제외하고 `backend/libs/safedb-lib/README.txt`로 복사를 안내하도록 SETUP-01 구현 범위를 보완(완료 조건과 검증 결과는 변경 없음), 기준 기술 설계서를 v1.10으로 갱신 | Claude |
+| v1.5 | 2026-11-10 | 머리말, 3장, 6장(DB-04), 7장(BE-08), 8장(FE-05), 9장(INT-05) | 추가 | 사내망 테스트에서 비교 대상 테이블이 복합 PK인 것으로 확인되어(PRD v1.4 PA-10 변경) 비교 키 선택과 키 중복 판정을 구현·검증하는 Task를 추가하고 기준 문서 버전을 갱신 | Claude |
 
 > 구분: 신규 / 추가 / 수정 / 삭제. 버전을 올릴 때는 '버전 이력'에 한 줄을 추가하고, 세부 변경 사항은 '변경 이력'에 섹션 단위로 기록한다.
 
-> 본 문서는 `1-PRD.md`(v1.3), `2-user-scenario.md`(v1.5), `3-screen-specification.md`(v1.5), `4-technical-design.md`(v1.10)를 기준으로 한다. 요구사항과 설계는 FR, NFR, SN, SC, TD, TA, PA, SA, WA ID로 참조하고 다시 정의하지 않는다. 이 문서에서 새로 정하는 사항은 개발 착수 전 결정 `D-xx`와 계획 가정·미결 `PL-xx`로 관리한다. 모든 완료 조건은 미체크 상태이며, 실제 개발과 테스트로 확인하기 전에는 체크하지 않는다.
+> 본 문서는 `1-PRD.md`(v1.4), `2-user-scenario.md`(v1.6), `3-screen-specification.md`(v1.6), `4-technical-design.md`(v1.11)를 기준으로 한다. 요구사항과 설계는 FR, NFR, SN, SC, TD, TA, PA, SA, WA ID로 참조하고 다시 정의하지 않는다. 이 문서에서 새로 정하는 사항은 개발 착수 전 결정 `D-xx`와 계획 가정·미결 `PL-xx`로 관리한다. 모든 완료 조건은 미체크 상태이며, 실제 개발과 테스트로 확인하기 전에는 체크하지 않는다.
 
 ## 1. 문서 개요 및 개발 목표
 
@@ -96,6 +98,10 @@ Task는 `.claude/skills/`의 개발 스킬로 실행한다. 두 스킬은 `disab
 | INT-02 | E2E 테스트 | 로컬 Oracle·가짜 복호화 구성, Playwright로 SN-01~04, SN-E01~E04 | FE-04, SETUP-05 | 전체 SN, SC | 메인 에이전트 |
 | INT-03 | 배포 zip·성능·민감정보 검증 | zip 실행, 로그 검사, 합성 데이터 성능·메모리 | SETUP-03, INT-02 | NFR-01·05·08, TA-09 | 메인 에이전트 |
 | INT-04 | 실환경 수동 검증 | 환경별 SafeDB, 읽기 전용 계정, 성능 실측, 실제 PC 설치 | BE-04, INT-03 | TA-02·03·07·10·11·13 | 사용자 + 메인 에이전트 |
+| DB-04 | 비교 키 메타데이터·조회 | 후보의 선택 불가 판정 제거, 기본 비교 키·`keyable`, 비교 키 기준 묶음 조회와 행 목록 | DB-03 | FR-02·03·06, PA-10·19 | `/develop-backend` |
+| BE-08 | 비교 키 요청·키 중복 판정 | `keyColumn` 검증, `DUPLICATE` 판정·건수, 요약·상세·엑셀 반영 | DB-04, BE-07 | FR-06·08·09, PA-10 | `/develop-backend` |
+| FE-05 | 비교 키 선택·키 중복 표시 | SC01-05 비교 키 드롭다운, 실행 검증, 키 중복 라벨·안내 | FE-04, BE-08 | FR-03·08, WA-14 | `/develop-frontend` |
+| INT-05 | 비교 키 변경 회귀 검증 | `oracleTest`, E2E 갱신, 배포 zip 재생성 | DB-04, BE-08, FE-05 | PRD v1.4 | 메인 에이전트 |
 
 ## 4. Task 의존성 및 실행 순서
 
@@ -391,6 +397,39 @@ Oracle 통합 테스트 `RowRepositoryOracleTest` 4건이 통과했다.
 
 **담당 스킬:** `/develop-backend DB-03`
 
+### DB-04. 비교 키 메타데이터·조회
+
+**목적:** 복합 PK·PK 없음 테이블도 비교할 수 있도록 비교 키 컬럼 기준으로 메타데이터와 묶음 조회를 바꾼다(PRD v1.4 PA-10).
+
+**참조 문서:** PRD FR-02·03·06, PA-10·19·20, 화면 정의서 SC01-05·WA-14, 기술 설계서 v1.11 5장(FR-02·03), 6.2·6.3절, 8장.
+
+**선행 Task:** DB-03
+
+**구현 범위:** 테이블 후보는 소유자·이름만 반환하고 PK 판정 쿼리를 하지 않는다. 컬럼 조회는 PK 구성을 확인해 PK 표시, `keyable`(문자형·NUMBER), 기본 비교 키(단일 PK이고 keyable이면 그 PK, 아니면 null)를 반환한다. `SqlBuilder`는 지정한 비교 키 컬럼으로 SQL을 만들고, `RowRepository`는 비교 키 값별 행 목록을 반환해 키 중복을 판단할 수 있게 한다. 비교 키는 메타데이터에 있고 keyable인 컬럼만 허용한다.
+
+**완료 조건:**
+- [x] 테이블 검색이 복합 PK·PK 없음·DATE PK 테이블도 반환하고 PK 조회 쿼리를 실행하지 않는다.
+- [x] 컬럼 조회가 단일 문자형·NUMBER PK는 기본 비교 키로, 복합 PK·PK 없음·DATE PK는 기본 비교 키 없음(null)으로 반환하고, 복합 PK 구성 컬럼을 모두 `pk=true`로 표시한다.
+- [x] `keyable`은 CHAR·VARCHAR2·NCHAR·NVARCHAR2·NUMBER 컬럼만 true다.
+- [x] `SqlBuilder`가 지정한 비교 키로 `WHERE "<키>" IN (...)`을 만들고, 메타데이터에 없거나 keyable이 아닌 비교 키는 SQL 생성 전에 거절한다.
+- [x] `RowRepository`가 같은 키의 행을 모두 모아 반환한다(목 테스트).
+- [x] [Oracle] 로컬 테스트 스키마의 복합 PK 테이블을 첫 번째 PK 컬럼으로 조회해 유일한 키는 1건, 중복 키는 2건 이상으로 반환되고, PK 없음 테이블도 지정한 키로 조회된다.
+
+**검증 방법:** JUnit 단위 테스트, 로컬 Oracle 통합 테스트(`gradlew oracleTest`).
+
+**검증 기록:** 2026-11-10, Claude, 통과.
+- 단위 테스트(`MetadataServiceTest`, `MetadataModelTest`, `MetadataControllerTest`, `SqlBuilderTest`, `OracleRowRepositoryTest`):
+  - 테이블 검색은 복합 PK·PK 없음·DATE PK도 후보로 반환하고 PK 조회를 실행하지 않는다.
+  - 기본 비교 키는 단일 문자형·NUMBER PK에만 있다. 복합 PK·PK 없음·DATE PK는 null이고, 복합 PK 구성 컬럼은 모두 `pk=true`다.
+  - `keyable`은 CHAR·VARCHAR2·NCHAR·NVARCHAR2·NUMBER만 true다.
+  - `SqlBuilder`는 지정한 비교 키로 `WHERE "<키>" IN`을 만들고, 없거나 keyable이 아닌 비교 키(DATE·CLOB·FLOAT·대소문자 다른 이름·null)는 SQL 생성 전에 `INVALID_INPUT`이다.
+  - `RowRepository`는 같은 키의 행을 모두 모아 돌려준다.
+- Oracle 통합 테스트(`MetadataOracleTest`, `RowRepositoryOracleTest`, `gradlew oracleTest` 31건 통과):
+  - `DM_IT_COMPOSITE`를 첫 번째 PK 컬럼 K1로 조회하면 C1은 1건, C2는 2건(합성 데이터 3행 추가)이다.
+  - `DM_IT_NOPK`도 ID로 조회된다.
+
+**담당 스킬:** `/develop-backend DB-04`
+
 ## 7. BE Task 상세
 
 ### BE-01. 공통 API 기반·로컬 보안
@@ -622,6 +661,36 @@ Oracle 통합 테스트 `CompareServiceOracleTest`가 통과했다. 실제 `Orac
 
 **담당 스킬:** `/develop-backend BE-07`
 
+### BE-08. 비교 키 요청·키 중복 판정
+
+**목적:** 비교 요청에서 비교 키를 받아 검증하고, 키 중복 짝을 판정해 요약·상세·엑셀에 반영한다(PRD v1.4 6.1).
+
+**참조 문서:** PRD FR-06·08·09, 6.1절, PA-10·19, 시나리오 SN-E02-1·SN-E04-7, 화면 정의서 SC03-04·06, 기술 설계서 v1.11 5장(FR-05·07·08·09), 8장.
+
+**선행 Task:** DB-04, BE-07
+
+**구현 범위:** `POST /api/compare`에 `keyColumn`을 필수로 받고, 없거나 메타데이터에 없거나 keyable이 아니면 400 `INVALID_INPUT`이다. 숫자 형식 검증은 비교 키 타입으로 한다. 비교 서비스는 어느 쪽이든 2건 이상 조회되면 `DUPLICATE`와 양쪽 건수(`duplicate: {a, b}`)를 기록하고 컬럼 비교·복호화를 하지 않으며, 누락보다 먼저 판정한다. 요약 건수에 `duplicate`, 조건에 `keyColumn`을 추가한다. 엑셀은 키 중복 짝을 "키 중복(A 2건)" 한 행(호박색)으로 기록하고 요약 시트에 비교 키와 키 중복 건수를 기록한다. 쓰이지 않게 된 `TABLE_NOT_SUPPORTED`를 삭제한다.
+
+**완료 조건:**
+- [x] `keyColumn` 누락·없는 컬럼·keyable 아님은 400 `INVALID_INPUT`이고 작업이 만들어지지 않는다.
+- [x] NUMBER 비교 키에서만 숫자 형식 검증을 한다.
+- [x] 한쪽이라도 2건 이상이면 `DUPLICATE`(건수 기록)이고 컬럼 비교와 복호화를 하지 않으며 누락보다 우선한다. 나머지 짝은 계속 처리한다.
+- [x] 요약 응답이 `counts.duplicate`, 항목의 `duplicate`, 조건의 `keyColumn`을 포함하고 상세 응답이 `duplicate`를 포함한다(JSON 스냅샷).
+- [x] 엑셀 상세 시트에 키 중복 짝이 "키 중복(A 2건)"처럼 호박색 한 행으로, 요약 시트에 비교 키와 키 중복 건수가 기록된다.
+- [x] `TABLE_NOT_SUPPORTED`가 오류 코드에서 삭제되고 HTTP 상태 매핑 테스트가 통과한다.
+
+**검증 방법:** JUnit·MockMvc 테스트(가짜 러너·저장소), 엑셀 재읽기.
+
+**검증 기록:** 2026-11-10, Claude, 통과(백엔드 단위 164건, 라인 커버리지 97.8%).
+- 요청 검증(`CompareTaskFactoryTest`): `keyColumn`이 없거나 없는 컬럼이거나 CLOB이면 `INVALID_INPUT`이다. PK가 아닌 NUMBER 컬럼도 비교 키로 쓸 수 있고, 숫자 검증은 비교 키 타입을 따른다.
+- 키 중복 판정(`CompareServiceTest`): A쪽 2건은 `DUPLICATE`(2,1)이다. A 없음이면서 B 2건인 경우도 누락보다 먼저 `DUPLICATE`(0,2)로 판정한다. 키 중복 짝은 컬럼 비교·복호화를 하지 않고 나머지 짝은 계속 비교한다.
+- 응답 형식(`CompareControllerTest`): 요약 JSON(STRICT)에 `condition.keyColumn`, `counts.duplicate`, 항목 `duplicate`가 있다. 상세의 `duplicate`와 빈 `rows`도 확인했다.
+- 엑셀(`ExcelExporterTest`): 요약 시트에 "비교 키", "키 중복" 건수와 비고가 있다. 상세 시트에 "키 중복(A 2건·B 3건)" 호박색 한 행이 있다.
+- 오류 코드: `TABLE_NOT_SUPPORTED`를 삭제했고 오류 코드 HTTP 매핑 테스트가 통과했다.
+- Oracle API 통합 테스트(`ApiIntegrationOracleTest`): 복합 PK 테이블을 K1로 비교하면 C1 일치, C2 `DUPLICATE`(2,2), C9 누락이다. 비교 키 없음·DATE 키·없는 키는 400이고, PK 없음 테이블은 ID 키로 일치한다.
+
+**담당 스킬:** `/develop-backend BE-08`
+
 ## 8. FE Task 상세
 
 ### FE-01. 프론트 기반
@@ -766,6 +835,38 @@ Oracle 통합 테스트 `CompareServiceOracleTest`가 통과했다. 실제 `Orac
 
 **담당 스킬:** `/develop-frontend FE-04`
 
+### FE-05. 비교 키 선택·키 중복 표시
+
+**목적:** 비교 키를 고르는 화면 요소와 키 중복 결과 표시를 구현한다(화면 정의서 v1.6).
+
+**참조 문서:** 화면 정의서 SC01-05, SC-01 오류 표, SC03-04·06, 4장, WA-12·14, 시나리오 SN-01, SN-E02-1, SN-E04-7.
+
+**선행 Task:** FE-04, BE-08
+
+**구현 범위:** 테이블 후보에서 선택 불가 표시를 없애고, 테이블을 고르면 비교 키 드롭다운(keyable 컬럼, PK는 "(PK)")을 표시한다. 기본 비교 키가 있으면 자동 선택, 없으면 "선택 안 함"이다. 비교 키를 바꿔도 컬럼 선택은 유지하며, A쪽 환경 변경으로 다시 조회한 목록에 비교 키가 없으면 기본값 규칙으로 다시 정한다(WA-14). [비교 실행] 시 비교 키가 없으면 "비교 키 컬럼을 선택해 주세요."를 안내하고 API를 호출하지 않는다. 숫자 검증은 비교 키 타입으로 한다. 결과 목록에 "키 중복(A 2건)" 라벨(호박색), 상세에 키 중복 안내, 머리글 건수에 키 중복을 표시한다.
+
+**완료 조건:**
+- [x] 복합 PK 테이블 후보가 사유 없이 선택되고, 단일 PK 테이블은 그 PK가, 복합 PK·PK 없음 테이블은 "선택 안 함"이 비교 키 기본값이다.
+- [x] 비교 키 드롭다운에 keyable 컬럼만 있고 PK에는 "(PK)"가 붙는다.
+- [x] 비교 키 없이 실행하면 안내만 표시되고 비교 시작 API가 호출되지 않으며, 요청에 고른 `keyColumn`이 담긴다.
+- [x] 비교 키 변경 시 컬럼 선택이 유지되고, NUMBER 비교 키에서만 숫자 오류 줄이 표시된다.
+- [x] 키 중복 짝이 "키 중복(A 2건)", "키 중복(A 2건·B 3건)" 라벨과 호박색으로 표시되고 상세에 화면 정의서 안내가 표시되며 컬럼 표가 없다.
+- [x] 결과 머리글에 키 중복 건수와 비교 키가 표시된다.
+
+**검증 방법:** Vitest 컴포넌트 테스트(API 모의).
+
+**검증 기록:** 2026-11-10, Claude, 통과(프론트 85건, `tsc --noEmit`·Prettier 통과).
+- 비교 키 선택(`setupScreen.test.tsx`):
+  - 복합 PK 테이블은 사유 표시 없이 선택되고, 비교 키 기본값은 "선택 안 함"이다.
+  - 후보는 keyable 컬럼만(`CONTROL_NO (PK)`, `SEQ (PK)`, `AMOUNT`)이고 DATE 컬럼은 없다.
+  - 비교 키 없이 실행하면 "비교 키 컬럼을 선택해 주세요."만 표시되고 API를 호출하지 않는다. 비교 키를 고른 뒤에는 컬럼 선택이 유지되고 요청에 `keyColumn`이 담긴다.
+  - 단일 PK 테이블은 그 PK가 기본값이다. 문자형 키에서는 숫자 검증을 하지 않고, NUMBER 키로 바꾸면 숫자 오류 줄이 표시된다.
+- 상태 관리(`reducer.test.ts`): 비교 키 기본값 설정, keyable 아닌 키 거부, 재조회 때 키 유지 또는 기본값 복귀(WA-14), 새 테이블 선택 시 초기화를 확인했다.
+- 결과 화면(`resultView.test.tsx`): "키 중복(A 2건·B 3건)" 라벨이 호박색 클래스로 표시되고, 상세에 화면 정의서 안내가 나오며 비교 표는 없다. 머리글에 "키 중복 1"과 "비교 키 TRX_NO"가 표시된다.
+- 문구(`messages.test.ts`): 키 중복 건수와 안내 문구를 확인했다.
+
+**담당 스킬:** `/develop-frontend FE-05`
+
 ## 9. INT Task 상세
 
 ### INT-01. 백엔드 통합 테스트
@@ -906,6 +1007,34 @@ Oracle 통합 테스트 `CompareServiceOracleTest`가 통과했다. 실제 `Orac
 **검증 기록:** 2026-11-10, Claude, 미수행(미완료). 개발 PC는 외부망이라 M-01~M-10을 수행할 수 없다(PL-13). 기록표를 `test/e2e/report.md` 5장에 만들었고 모든 항목은 `미검증`이다. 사내망 담당자 PC에서 사용자가 수행한 뒤 결과를 기록한다
 
 **담당 스킬:** 사용자 + 메인 에이전트
+
+### INT-05. 비교 키 변경 회귀 검증
+
+**목적:** 비교 키 변경 후 전체 기능이 이전과 같이 동작하고 키 중복이 끝까지 처리되는지 확인한다.
+
+**참조 문서:** PRD v1.4, 시나리오 v1.6, 화면 정의서 v1.6, 기술 설계서 v1.11.
+
+**선행 Task:** DB-04, BE-08, FE-05
+
+**구현 범위:** 로컬 Oracle 합성 데이터에 키 중복이 생기는 복합 PK 행을 추가하고 `oracleTest`와 E2E 스크립트를 갱신해 실행한다. 배포 zip을 다시 만든다.
+
+**완료 조건:**
+- [x] `gradlew test`, `gradlew oracleTest`, 프론트 테스트가 모두 통과한다.
+- [x] [Oracle] API 통합 테스트에서 복합 PK 테이블을 첫 번째 PK 컬럼으로 비교해 유일 키는 일치·불일치, 중복 키는 `DUPLICATE`로 판정되고 비교 키 미지정은 400이다.
+- [x] E2E에서 복합 PK 테이블의 비교 키 선택, 비교 키 미선택 안내, 키 중복 표시와 엑셀 기록을 확인하고 기존 시나리오가 통과한다.
+- [x] 배포 zip을 다시 만들고 `verifyDistZip`이 통과한다.
+
+**검증 방법:** `gradlew test oracleTest`, Vitest, E2E 스크립트, `test/e2e/report.md` 기록.
+
+**검증 기록:** 2026-11-10, Claude, 통과.
+- 자동 테스트: `gradlew test` 164건, `gradlew oracleTest` 31건, Vitest 85건이 모두 통과했다.
+- E2E: e2eServer와 Edge(CDP) 브라우저 자동화로 28건이 통과했다(정상 26, 연결 실패 2). 기존 시나리오가 모두 통과했고, 다음을 새로 확인했다.
+  - SN-E02-1: 복합 PK 테이블 선택과 비교 키 미선택 안내
+  - SN-E04-7: K1 비교 키로 "키 중복(A 2건·B 2건)" 라벨, 상세 안내, 엑셀 호박색 행, 요약 시트 "비교 키=K1"
+- 배포: 배포 zip을 다시 만들었고 `verifyDistZip`이 통과했다.
+- 결과는 `test/e2e/report.md` 6장에 있다.
+
+**담당 스킬:** 메인 에이전트
 
 ## 10. 개발 착수 전 결정 사항
 

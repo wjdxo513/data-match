@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -24,12 +23,10 @@ import kr.kicc.datamatch.config.DataMatchProperties.EnvironmentProperties;
 import kr.kicc.datamatch.config.DataSourceRegistry;
 import kr.kicc.datamatch.error.DataMatchException;
 import kr.kicc.datamatch.error.ErrorCode;
-import kr.kicc.datamatch.metadata.PkSupport.UnsupportedReason;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
-/** DB-02: 테이블 검색·PK 판정·컬럼 조회와 오류 분류(기술 설계서 6.2절, TD-07). */
+/** DB-02·DB-04: 테이블 검색·컬럼·PK 조회와 오류 분류(기술 설계서 6.2절, TD-07, PRD PA-10). */
 class MetadataServiceTest {
 
     private MetadataRepository repository;
@@ -78,36 +75,24 @@ class MetadataServiceTest {
     }
 
     @Test
-    void moreThanThirtyCandidatesAreTruncatedAndPkIsJudgedOnlyForReturnedOnes() throws Exception {
+    void moreThanThirtyCandidatesAreTruncatedWithoutPkQueries() throws Exception {
         List<TableName> rows = IntStream.rangeClosed(1, 31).mapToObj(i -> t(String.format("T%02d", i))).collect(Collectors.toList());
         when(repository.searchTables(anyString(), anyString(), anyInt())).thenReturn(rows);
-        when(repository.findPrimaryKeys(anyString(), anyList())).thenReturn(Map.of());
         TableSearchResult result = service.searchTables("test", "T0");
         assertThat(result.isTruncated()).isTrue();
-        assertThat(result.getItems()).hasSize(30);
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<TableName>> captor = ArgumentCaptor.forClass(List.class);
-        verify(repository).findPrimaryKeys(eq("test"), captor.capture());
-        assertThat(captor.getValue()).hasSize(30).doesNotContain(t("T31"));
+        assertThat(result.getItems()).hasSize(30).doesNotContain(new TableCandidate("OWN", "T31"));
+        verify(repository, never()).findPrimaryKeys(anyString(), anyList());
     }
 
     @Test
-    void candidatesCarryPkJudgement() throws Exception {
-        List<TableName> rows = List.of(t("STR"), t("NUM"), t("COMP"), t("NOPK"), t("DATEPK"));
+    void allTablesAreCandidatesRegardlessOfPk() throws Exception {
+        List<TableName> rows = List.of(t("STR"), t("COMP"), t("NOPK"), t("DATEPK"));
         when(repository.searchTables(anyString(), anyString(), anyInt())).thenReturn(rows);
-        when(repository.findPrimaryKeys(anyString(), anyList())).thenReturn(Map.of(
-                t("STR"), List.of(new PkColumn("TRX_NO", "VARCHAR2")),
-                t("NUM"), List.of(new PkColumn("TRX_ID", "NUMBER")),
-                t("COMP"), List.of(new PkColumn("K1", "VARCHAR2"), new PkColumn("K2", "NUMBER")),
-                t("DATEPK"), List.of(new PkColumn("D", "DATE"))));
         TableSearchResult result = service.searchTables("test", "OWN");
         assertThat(result.isTruncated()).isFalse();
-        assertThat(result.getItems()).containsExactly(
-                new TableCandidate("OWN", "STR", true, null, "TRX_NO"),
-                new TableCandidate("OWN", "NUM", true, null, "TRX_ID"),
-                new TableCandidate("OWN", "COMP", false, UnsupportedReason.COMPOSITE_PK, null),
-                new TableCandidate("OWN", "NOPK", false, UnsupportedReason.NO_PK, null),
-                new TableCandidate("OWN", "DATEPK", false, UnsupportedReason.UNSUPPORTED_PK_TYPE, null));
+        assertThat(result.getItems()).containsExactly(new TableCandidate("OWN", "STR"), new TableCandidate("OWN", "COMP"),
+                new TableCandidate("OWN", "NOPK"), new TableCandidate("OWN", "DATEPK"));
+        verify(repository, never()).findPrimaryKeys(anyString(), anyList());
     }
 
     @Test
@@ -118,13 +103,13 @@ class MetadataServiceTest {
         when(repository.findColumns("test", t("NUM"))).thenReturn(columns);
         when(repository.findPrimaryKeys("test", List.of(t("NUM")))).thenReturn(Map.of(t("NUM"), List.of(new PkColumn("TRX_ID", "NUMBER"))));
         TableMetadata meta = service.describeTable("test", "OWN", "NUM");
-        assertThat(meta.getPkColumn()).isEqualTo("TRX_ID");
-        assertThat(meta.isNumericPk()).isTrue();
+        assertThat(meta.getPkColumns()).containsExactly("TRX_ID");
+        assertThat(meta.defaultKeyColumn()).isEqualTo("TRX_ID");
         assertThat(meta.getColumns()).extracting(ColumnMeta::getName).containsExactly("TRX_ID", "APPR_MSG");
     }
 
     @Test
-    void unknownTableIsRejectedAndUnsupportedPkIsTableNotSupported() throws Exception {
+    void unknownTableIsRejectedAndCompositePkTableIsDescribedWithoutDefaultKey() throws Exception {
         when(repository.findColumns(anyString(), any())).thenReturn(List.of());
         assertThatThrownBy(() -> service.describeTable("test", "OWN", "NOPE")).satisfies(e -> assertCode(e, ErrorCode.INVALID_INPUT));
         assertThatThrownBy(() -> service.describeTable("test", " ", "T")).satisfies(e -> assertCode(e, ErrorCode.INVALID_INPUT));
@@ -132,17 +117,19 @@ class MetadataServiceTest {
         when(repository.findColumns("test", t("COMP"))).thenReturn(List.of(new ColumnMeta("K1", "VARCHAR2", 10, null, null, 10)));
         when(repository.findPrimaryKeys(anyString(), anyList())).thenReturn(Map.of(
                 t("COMP"), List.of(new PkColumn("K1", "VARCHAR2"), new PkColumn("K2", "VARCHAR2"))));
-        assertThatThrownBy(() -> service.describeTable("test", "OWN", "COMP"))
-                .satisfies(e -> assertCode(e, ErrorCode.TABLE_NOT_SUPPORTED))
-                .satisfies(e -> assertThat(((DataMatchException) e).details()).isEqualTo(Map.of("reason", "COMPOSITE_PK")));
+        TableMetadata comp = service.describeTable("test", "OWN", "COMP");
+        assertThat(comp.getPkColumns()).containsExactly("K1", "K2");
+        assertThat(comp.defaultKeyColumn()).isNull();
+        assertThat(comp.requireKeyColumn("K1").getName()).isEqualTo("K1");
+        when(repository.findColumns("test", t("NOPK"))).thenReturn(List.of(new ColumnMeta("ID", "VARCHAR2", 10, null, null, 10)));
+        assertThat(service.describeTable("test", "OWN", "NOPK").getPkColumns()).isEmpty();
     }
 
     @Test
     void unknownColumnsAreRejected() {
-        TableMetadata meta = new TableMetadata("OWN", "T", "ID", "VARCHAR2",
+        TableMetadata meta = new TableMetadata("OWN", "T", List.of("ID"),
                 List.of(new ColumnMeta("ID", "VARCHAR2", 10, null, null, 10), new ColumnMeta("MSG", "CLOB", 4000, null, null, 0)));
         assertThat(meta.requireColumns(List.of("MSG", "ID"))).extracting(ColumnMeta::getName).containsExactly("MSG", "ID");
-        assertThat(meta.isNumericPk()).isFalse();
         assertThatThrownBy(() -> meta.requireColumns(List.of("ID", "id"))).satisfies(e -> assertCode(e, ErrorCode.INVALID_INPUT));
         assertThatThrownBy(() -> meta.requireColumns(List.of("ID\" FROM DUAL --"))).satisfies(e -> assertCode(e, ErrorCode.INVALID_INPUT));
         assertThatThrownBy(() -> meta.requireColumns(List.of())).satisfies(e -> assertCode(e, ErrorCode.INVALID_INPUT));

@@ -52,7 +52,7 @@ import org.springframework.test.web.servlet.MockMvc;
         CompareControllerTest.RunnerConfig.class})
 class CompareControllerTest {
 
-    private static final TableMetadata TABLE = new TableMetadata("DM_IT_OWNER", "DM_IT_TRX_STR", "TRX_NO", "VARCHAR2", List.of(
+    private static final TableMetadata TABLE = new TableMetadata("DM_IT_OWNER", "DM_IT_TRX_STR", List.of("TRX_NO"), List.of(
             new ColumnMeta("TRX_NO", "VARCHAR2", 20, null, null, 20), new ColumnMeta("AMOUNT", "NUMBER", 22, 12, 0, 0),
             new ColumnMeta("APPR_MSG", "CLOB", 4000, null, null, 0)));
 
@@ -76,7 +76,8 @@ class CompareControllerTest {
                                 FieldResultTestFactory.compared("AMOUNT", null, "100", "200"),
                                 FieldResultTestFactory.compared("APPR_MSG", "res_cd", "0000", null),
                                 FieldResultTestFactory.decryptError("APPR_MSG", DecryptErrorCause.JSON_INVALID, Side.B)), 3),
-                        new PairResult(3, "A3", "B3", PairStatus.MISSING, MissingSide.B, List.of(), 0));
+                        new PairResult(3, "A3", "B3", PairStatus.MISSING, MissingSide.B, List.of(), 0),
+                        PairResult.duplicate(4, new TransactionPair(4, "A4", "B4"), 2, 1));
             };
         }
     }
@@ -90,12 +91,12 @@ class CompareControllerTest {
     @org.springframework.boot.test.mock.mockito.SpyBean
     private kr.kicc.datamatch.excel.ExcelExporter excelExporter;
 
-    private static final String BODY = "{\"envA\":\"test\",\"envB\":\"prod\",\"owner\":\"DM_IT_OWNER\",\"table\":\"DM_IT_TRX_STR\","
+    private static final String BODY = "{\"envA\":\"test\",\"envB\":\"prod\",\"owner\":\"DM_IT_OWNER\",\"table\":\"DM_IT_TRX_STR\",\"keyColumn\":\"TRX_NO\","
             + "\"columns\":[{\"name\":\"AMOUNT\"},{\"name\":\"APPR_MSG\",\"decrypt\":{\"policy\":\"KDKEY\"}}],"
             + "\"pairsText\":\"A1,B1\\nA2,B2\\nA3,B3\"}";
 
     private CompareTask task() {
-        return new CompareTask("test", "prod", TABLE,
+        return new CompareTask("test", "prod", TABLE, "TRX_NO",
                 List.of(ColumnSpec.plain("AMOUNT"), ColumnSpec.decrypted("APPR_MSG", DecryptPolicy.KDKEY)),
                 List.of(new TransactionPair(1, "A1", "B1"), new TransactionPair(2, "A2", "B2"), new TransactionPair(3, "A3", "B3")),
                 "2026-11-10T10:00:00");
@@ -106,7 +107,7 @@ class CompareControllerTest {
     }
 
     private String start(CompareTask task) throws Exception {
-        when(taskFactory.create(anyString(), anyString(), anyString(), anyString(), anyList(), anyString())).thenReturn(task);
+        when(taskFactory.create(anyString(), anyString(), anyString(), anyString(), anyString(), anyList(), anyString())).thenReturn(task);
         String body = mvc.perform(post("/api/compare").header("Host", "localhost").contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.total").value(task.getPairs().size()))
@@ -139,18 +140,20 @@ class CompareControllerTest {
         String summary = mvc.perform(get("/api/compare/" + jobId + "/summary").header("Host", "localhost"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         JSONAssert.assertEquals("{"
-                + "\"condition\":{\"envA\":\"test\",\"envB\":\"prod\",\"owner\":\"DM_IT_OWNER\",\"table\":\"DM_IT_TRX_STR\","
+                + "\"condition\":{\"envA\":\"test\",\"envB\":\"prod\",\"owner\":\"DM_IT_OWNER\",\"table\":\"DM_IT_TRX_STR\",\"keyColumn\":\"TRX_NO\","
                 + "  \"columns\":[{\"name\":\"AMOUNT\"},{\"name\":\"APPR_MSG\",\"decrypt\":\"KDKEY\"}],\"comparedAt\":\"2026-11-10T10:00:00\"},"
-                + "\"counts\":{\"total\":3,\"match\":1,\"mismatch\":1,\"missing\":1},"
+                + "\"counts\":{\"total\":4,\"match\":1,\"mismatch\":1,\"missing\":1,\"duplicate\":1},"
                 + "\"items\":["
-                + "  {\"index\":1,\"a\":\"A1\",\"b\":\"B1\",\"status\":\"MATCH\",\"mismatchCount\":0,\"missing\":null},"
-                + "  {\"index\":2,\"a\":\"A2\",\"b\":\"B2\",\"status\":\"MISMATCH\",\"mismatchCount\":3,\"missing\":null},"
-                + "  {\"index\":3,\"a\":\"A3\",\"b\":\"B3\",\"status\":\"MISSING\",\"mismatchCount\":0,\"missing\":\"B\"}]}",
+                + "  {\"index\":1,\"a\":\"A1\",\"b\":\"B1\",\"status\":\"MATCH\",\"mismatchCount\":0,\"missing\":null,\"duplicate\":null},"
+                + "  {\"index\":2,\"a\":\"A2\",\"b\":\"B2\",\"status\":\"MISMATCH\",\"mismatchCount\":3,\"missing\":null,\"duplicate\":null},"
+                + "  {\"index\":3,\"a\":\"A3\",\"b\":\"B3\",\"status\":\"MISSING\",\"mismatchCount\":0,\"missing\":\"B\",\"duplicate\":null},"
+                + "  {\"index\":4,\"a\":\"A4\",\"b\":\"B4\",\"status\":\"DUPLICATE\",\"mismatchCount\":0,\"missing\":null,"
+                + "   \"duplicate\":{\"a\":2,\"b\":1}}]}",
                 summary, JSONCompareMode.STRICT);
 
         String detail = mvc.perform(get("/api/compare/" + jobId + "/pairs/2").header("Host", "localhost"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        JSONAssert.assertEquals("{\"index\":2,\"a\":\"A2\",\"b\":\"B2\",\"status\":\"MISMATCH\",\"missing\":null,\"rows\":["
+        JSONAssert.assertEquals("{\"index\":2,\"a\":\"A2\",\"b\":\"B2\",\"status\":\"MISMATCH\",\"missing\":null,\"duplicate\":null,\"rows\":["
                 + "{\"name\":\"AMOUNT\",\"a\":\"100\",\"b\":\"200\",\"status\":\"MISMATCH\",\"message\":null},"
                 + "{\"name\":\"APPR_MSG.res_cd\",\"a\":\"0000\",\"b\":null,\"status\":\"MISMATCH\",\"message\":null},"
                 + "{\"name\":\"APPR_MSG\",\"a\":null,\"b\":null,\"status\":\"DECRYPT_ERROR\",\"message\":\"JSON_INVALID\"}]}",
@@ -158,7 +161,12 @@ class CompareControllerTest {
         mvc.perform(get("/api/compare/" + jobId + "/pairs/3").header("Host", "localhost"))
                 .andExpect(jsonPath("$.missing").value("B"))
                 .andExpect(jsonPath("$.rows.length()").value(0));
-        for (String bad : new String[] {"0", "4"}) {
+        mvc.perform(get("/api/compare/" + jobId + "/pairs/4").header("Host", "localhost"))
+                .andExpect(jsonPath("$.status").value("DUPLICATE"))
+                .andExpect(jsonPath("$.duplicate.a").value(2))
+                .andExpect(jsonPath("$.duplicate.b").value(1))
+                .andExpect(jsonPath("$.rows.length()").value(0));
+        for (String bad : new String[] {"0", "5"}) {
             mvc.perform(get("/api/compare/" + jobId + "/pairs/" + bad).header("Host", "localhost"))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code").value("PAIR_NOT_FOUND"));
@@ -195,8 +203,8 @@ class CompareControllerTest {
     @Test
     void excelDownloadUsesUtf8FileNameAndFailureKeepsResult() throws Exception {
         gate = new CountDownLatch(0);
-        TableMetadata korean = new TableMetadata("DM_IT_OWNER", "거래_테이블", "TRX_NO", "VARCHAR2", TABLE.getColumns());
-        String jobId = start(new CompareTask("test", "prod", korean, List.of(ColumnSpec.plain("AMOUNT")),
+        TableMetadata korean = new TableMetadata("DM_IT_OWNER", "거래_테이블", List.of("TRX_NO"), TABLE.getColumns());
+        String jobId = start(new CompareTask("test", "prod", korean, "TRX_NO", List.of(ColumnSpec.plain("AMOUNT")),
                 List.of(new TransactionPair(1, "A1", "B1")), "2026-11-10T15:15:30"));
         awaitStatus(jobId, "COMPLETED");
         org.springframework.mock.web.MockHttpServletResponse res = mvc.perform(get("/api/compare/" + jobId + "/excel")
@@ -216,7 +224,7 @@ class CompareControllerTest {
                 .andExpect(jsonPath("$.code").value("EXCEL_FAILED"));
         mvc.perform(get("/api/compare/" + jobId + "/summary").header("Host", "localhost"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.counts.total").value(3));
+                .andExpect(jsonPath("$.counts.total").value(4));
         mvc.perform(get("/api/compare/other/excel").header("Host", "localhost"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("JOB_NOT_FOUND"));
@@ -240,7 +248,7 @@ class CompareControllerTest {
     @Test
     void validationFailureIs400AndCreatesNoJob() throws Exception {
         gate = new CountDownLatch(0);
-        when(taskFactory.create(any(), any(), any(), any(), any(), any())).thenThrow(new DataMatchException(ErrorCode.INVALID_INPUT,
+        when(taskFactory.create(any(), any(), any(), any(), any(), any(), any())).thenThrow(new DataMatchException(ErrorCode.INVALID_INPUT,
                 "invalid pairs input", List.of(Map.of("line", 2, "reason", "NO_DELIMITER"))));
         mvc.perform(post("/api/compare").header("Host", "localhost").contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isBadRequest())

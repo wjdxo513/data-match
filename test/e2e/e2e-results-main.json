@@ -8,7 +8,7 @@
   {
     "id": "SN-01",
     "result": "통과",
-    "note": "개발-개발 동일 키 5쌍: 총 5쌍 · 일치 5 · 불일치 0 · 누락 0",
+    "note": "개발-개발 동일 키 5쌍: 총 5쌍 · 일치 5 · 불일치 0 · 누락 0 · 키 중복 0",
     "screenshot": "screenshots/sn01-same-env.png"
   },
   {
@@ -20,7 +20,7 @@
   {
     "id": "SN-02",
     "result": "통과",
-    "note": "개발-운영 12쌍: 총 12쌍 · 일치 7 · 불일치 4 · 누락 1, 운영 배지(B만)=true, 조건=\"A 개발B 운영DM_IT_OWNER.DM_IT_TRX_STR · 비교 컬럼 2개\"",
+    "note": "개발-운영 12쌍: 총 12쌍 · 일치 7 · 불일치 4 · 누락 1 · 키 중복 0, 운영 배지(B만)=true, 조건=\"A 개발B 운영DM_IT_OWNER.DM_IT_TRX_STR · 비교 키 TRX_NO · 비교 컬럼 2개\"",
     "screenshot": "screenshots/sn02-cross-env-prod-warning.png"
   },
   {
@@ -44,7 +44,7 @@
   {
     "id": "SN-04",
     "result": "통과",
-    "note": "파일 datamatch_dev-prod_DM_IT_TRX_STR_20261110-144932.xlsx: 시트=요약,상세, 머리글=순번|거래번호A|거래번호B|컬럼·필드|A값(개발)|B값(운영)|상태, 불일치 빨강=true, 누락 호박색=true, 요약 환경=개발(dev)/운영(prod), 긴 값 펼침 261→40139자",
+    "note": "파일 datamatch_dev-prod_DM_IT_TRX_STR_20261110-174821.xlsx: 시트=요약,상세, 머리글=순번|거래번호A|거래번호B|컬럼·필드|A값(개발)|B값(운영)|상태, 불일치 빨강=true, 누락 호박색=true, 요약 환경=개발(dev)/운영(prod), 긴 값 펼침 261→40139자",
     "screenshot": "screenshots/sn04-result-detail.png"
   },
   {
@@ -104,8 +104,14 @@
   {
     "id": "SN-E02-1",
     "result": "통과",
-    "note": "사유 3종 표시=true/true/true, 선택되지 않음=true",
-    "screenshot": "screenshots/sn-e02-1-unsupported-table.png"
+    "note": "복합 PK 테이블 선택 가능, 비교 키 기본값 \"선택 안 함\", 후보=선택 안 함 / K1 (PK) / K2 (PK) / VAL, 미선택 실행 → 안내만 표시=true",
+    "screenshot": "screenshots/sn-e02-1-key-not-selected.png"
+  },
+  {
+    "id": "SN-E04-7",
+    "result": "통과",
+    "note": "비교 키 K1: 라벨=일치, 키 중복(A 2건·B 2건), 상세 안내·비교 표 없음=true, 건수=\"총 2쌍 · 일치 1 · 불일치 0 · 누락 0 · 키 중복 1\", 조건=\"A 개발B 운영DM_IT_OWNER.DM_IT_COMPOSITE · 비교 키 K1 · 비교 컬럼 1개\", 엑셀 호박색 \"키 중복(A 2건·B 2건)\"=true, 요약 \"비교 키=K1\"",
+    "screenshot": "screenshots/sn-e04-7-duplicate-key.png"
   },
   {
     "id": "SN-E01-3",

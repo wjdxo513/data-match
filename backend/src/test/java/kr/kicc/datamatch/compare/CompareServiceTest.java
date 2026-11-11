@@ -27,13 +27,13 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 @ExtendWith(OutputCaptureExtension.class)
 class CompareServiceTest {
 
-    private static final TableMetadata TABLE = new TableMetadata("O", "T", "ID", "VARCHAR2", List.of(
+    private static final TableMetadata TABLE = new TableMetadata("O", "T", List.of("ID"), List.of(
             new ColumnMeta("ID", "VARCHAR2", 20, null, null, 20), new ColumnMeta("AMOUNT", "NUMBER", 22, null, null, 0),
             new ColumnMeta("APPR_MSG", "CLOB", 4000, null, null, 0)));
 
     /** 환경별로 미리 넣어 둔 행을 돌려주고 호출을 기록하는 가짜 저장소. */
     static class FakeRows implements RowRepository {
-        final Map<String, Map<String, Map<String, String>>> data = new HashMap<>();
+        final Map<String, Map<String, List<Map<String, String>>>> data = new HashMap<>();
         final List<String> envCalls = new ArrayList<>();
         final List<List<String>> keyCalls = new ArrayList<>();
         Runnable onCall = () -> { };
@@ -45,11 +45,12 @@ class CompareServiceTest {
             for (int i = 0; i < kv.length; i += 2) {
                 row.put(kv[i], kv[i + 1]);
             }
-            data.computeIfAbsent(env, e -> new HashMap<>()).put(key, row);
+            // 같은 키를 여러 번 넣으면 키 중복이 된다.
+            data.computeIfAbsent(env, e -> new HashMap<>()).computeIfAbsent(key, k -> new ArrayList<>()).add(row);
         }
 
         @Override
-        public Map<String, Map<String, String>> fetchRows(String env, RowQuery query, List<String> keys, CancellationToken token) {
+        public Map<String, List<Map<String, String>>> fetchRows(String env, RowQuery query, List<String> keys, CancellationToken token) {
             if (token.isCancelled()) {
                 throw new QueryCancelledException();
             }
@@ -59,11 +60,11 @@ class CompareServiceTest {
             if (failOn != null && env.equals(failEnv)) {
                 throw failOn;
             }
-            Map<String, Map<String, String>> result = new HashMap<>();
+            Map<String, List<Map<String, String>>> result = new HashMap<>();
             for (String k : keys) {
-                Map<String, String> row = data.getOrDefault(env, Map.of()).get(k);
-                if (row != null) {
-                    result.put(k, row);
+                List<Map<String, String>> found = data.getOrDefault(env, Map.of()).get(k);
+                if (found != null) {
+                    result.put(k, found);
                 }
             }
             return result;
@@ -82,7 +83,7 @@ class CompareServiceTest {
     }
 
     private static CompareTask task(List<ColumnSpec> columns, List<TransactionPair> pairs) {
-        return new CompareTask("test", "prod", TABLE, columns, pairs, "2026-11-10T10:00:00");
+        return new CompareTask("test", "prod", TABLE, "ID", columns, pairs, "2026-11-10T10:00:00");
     }
 
     private static List<TransactionPair> pairs(int n) {
@@ -280,5 +281,26 @@ class CompareServiceTest {
             }
             Thread.sleep(10);
         }
+    }
+
+    @Test
+    void duplicateKeysAreJudgedBeforeMissingWithoutComparingOrDecrypting() {
+        String cipher = FakeDecryptor.encrypt("{}");
+        rows.put("test", "A1", "APPR_MSG", cipher);
+        rows.put("test", "A1", "APPR_MSG", cipher); // A쪽 2건
+        rows.put("prod", "B1", "APPR_MSG", cipher);
+        rows.put("prod", "B2", "APPR_MSG", cipher);
+        rows.put("prod", "B2", "APPR_MSG", cipher); // A2 없음 + B쪽 2건
+        rows.put("test", "A3", "APPR_MSG", cipher);
+        rows.put("prod", "B3", "APPR_MSG", cipher);
+        List<PairResult> r = service.run(task(List.of(ColumnSpec.decrypted("APPR_MSG", DecryptPolicy.KDKEY)), pairs(3)),
+                p -> { }, new CancellationToken());
+        assertThat(r).extracting(PairResult::getStatus).containsExactly(PairStatus.DUPLICATE, PairStatus.DUPLICATE, PairStatus.MATCH);
+        assertThat(r.get(0).getDuplicate()).isEqualTo(new PairResult.DuplicateCount(2, 1));
+        assertThat(r.get(1).getDuplicate()).isEqualTo(new PairResult.DuplicateCount(0, 2));
+        assertThat(r.get(1).getMissing()).isNull();
+        assertThat(r.get(0).getRows()).isEmpty();
+        assertThat(r.get(2).getDuplicate()).isNull();
+        assertThat(decryptor.calls()).hasSize(2);
     }
 }

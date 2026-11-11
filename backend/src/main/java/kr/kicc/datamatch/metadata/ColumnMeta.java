@@ -38,4 +38,15 @@ public class ColumnMeta {
     public boolean isClob() {
         return "CLOB".equals(dataType);
     }
+
+    /** 비교 키로 쓸 수 있는 타입: 문자형과 NUMBER(PRD PA-19). */
+    public boolean isKeyable() {
+        return KEYABLE_TYPES.contains(dataType);
+    }
+
+    public boolean isNumber() {
+        return "NUMBER".equals(dataType);
+    }
+
+    private static final java.util.Set<String> KEYABLE_TYPES = java.util.Set.of("CHAR", "VARCHAR2", "NCHAR", "NVARCHAR2", "NUMBER");
 }

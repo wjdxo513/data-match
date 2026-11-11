@@ -9,7 +9,6 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "Invalid input"),
     ENV_NOT_CONFIGURED(HttpStatus.BAD_REQUEST, "Environment is not configured"),
-    TABLE_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "Table is not supported"),
     JOB_RUNNING(HttpStatus.CONFLICT, "Another comparison job is running"),
     JOB_NOT_FOUND(HttpStatus.NOT_FOUND, "Job not found"),
     JOB_NOT_COMPLETED(HttpStatus.CONFLICT, "Job is not completed"),

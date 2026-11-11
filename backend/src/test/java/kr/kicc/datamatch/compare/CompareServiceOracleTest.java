@@ -52,7 +52,7 @@ class CompareServiceOracleTest {
         for (int i = 1; i <= 1000; i++) {
             text.append(String.format("A%06d,B%06d%n", i, i));
         }
-        CompareTask task = factory.create("test", "prod", "DM_IT_OWNER", "DM_IT_TRX_STR",
+        CompareTask task = factory.create("test", "prod", "DM_IT_OWNER", "DM_IT_TRX_STR", "TRX_NO",
                 List.of(ColumnSpec.plain("ORDER_NO"), ColumnSpec.plain("AMOUNT"), ColumnSpec.plain("MEMO"),
                         ColumnSpec.decrypted("APPR_MSG", DecryptPolicy.KDKEY)), text.toString());
         List<Integer> reports = new ArrayList<>();

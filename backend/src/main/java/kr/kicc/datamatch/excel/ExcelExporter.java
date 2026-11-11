@@ -67,6 +67,7 @@ public class ExcelExporter {
         long match = results.stream().filter(r -> r.getStatus() == PairStatus.MATCH).count();
         long mismatch = results.stream().filter(r -> r.getStatus() == PairStatus.MISMATCH).count();
         long missing = results.stream().filter(r -> r.getStatus() == PairStatus.MISSING).count();
+        long duplicate = results.stream().filter(r -> r.getStatus() == PairStatus.DUPLICATE).count();
         String columns = task.getColumns().stream()
                 .map(c -> c.isDecrypted() ? c.getName() + "(복호화 " + c.getDecrypt() + ")" : c.getName())
                 .collect(Collectors.joining(", "));
@@ -74,12 +75,14 @@ public class ExcelExporter {
             {"A쪽 환경", envLabel(task.getEnvA())},
             {"B쪽 환경", envLabel(task.getEnvB())},
             {"테이블", task.getTable().getOwner() + "." + task.getTable().getName()},
+            {"비교 키", task.getKeyColumn()},
             {"비교 컬럼", columns},
             {"비교 일시", LocalDateTime.parse(task.getComparedAt(), IN).format(SHOW_TIME)},
             {"총 쌍", String.valueOf(results.size())},
             {"일치", String.valueOf(match)},
             {"불일치", String.valueOf(mismatch)},
             {"누락", String.valueOf(missing)},
+            {"키 중복", String.valueOf(duplicate)},
         };
         int r = 0;
         for (String[] kv : condition) {
@@ -111,7 +114,7 @@ public class ExcelExporter {
         header(sheet.createRow(r++), styles, "순번", "거래번호A", "거래번호B", "컬럼·필드",
                 "A값(" + EnvironmentNames.of(task.getEnvA()) + ")", "B값(" + EnvironmentNames.of(task.getEnvB()) + ")", "상태");
         for (PairResult p : results) {
-            if (p.getStatus() == PairStatus.MISSING) {
+            if (p.getStatus() == PairStatus.MISSING || p.getStatus() == PairStatus.DUPLICATE) {
                 Row row = sheet.createRow(r++);
                 CellStyle style = styles.missing;
                 cell(row, 0, String.valueOf(p.getIndex()), style);
@@ -120,7 +123,7 @@ public class ExcelExporter {
                 cell(row, 3, "", style);
                 cell(row, 4, "", style);
                 cell(row, 5, "", style);
-                cell(row, 6, missingLabel(p.getMissing()), style);
+                cell(row, 6, pairLabel(p), style);
                 continue;
             }
             for (FieldResult f : p.getRows()) {
@@ -153,6 +156,8 @@ public class ExcelExporter {
                 return "일치";
             case MISMATCH:
                 return "불일치";
+            case DUPLICATE:
+                return duplicateLabel(p);
             default:
                 return missingLabel(p.getMissing());
         }
@@ -165,7 +170,26 @@ public class ExcelExporter {
         return "누락(" + side + " 없음)";
     }
 
+    /** "키 중복(A 2건)", "키 중복(A 2건·B 3건)": 2건 이상 조회된 쪽만 쓴다(화면 정의서 SC03-04). */
+    static String duplicateLabel(PairResult p) {
+        return "키 중복(" + duplicateCounts(p) + ")";
+    }
+
+    private static String duplicateCounts(PairResult p) {
+        StringBuilder sb = new StringBuilder();
+        if (p.getDuplicate().getA() > 1) {
+            sb.append("A ").append(p.getDuplicate().getA()).append("건");
+        }
+        if (p.getDuplicate().getB() > 1) {
+            sb.append(sb.length() > 0 ? "·" : "").append("B ").append(p.getDuplicate().getB()).append("건");
+        }
+        return sb.toString();
+    }
+
     static String remark(PairResult p) {
+        if (p.getStatus() == PairStatus.DUPLICATE) {
+            return "키 중복 " + duplicateCounts(p);
+        }
         if (p.getStatus() == PairStatus.MISSING) {
             return p.getMissing() == MissingSide.BOTH ? "A·B 모두 없음" : p.getMissing() + " 없음";
         }
@@ -232,6 +256,7 @@ public class ExcelExporter {
                 case MISMATCH:
                     return mismatch;
                 case MISSING:
+                case DUPLICATE:
                     return missing;
                 default:
                     return null;

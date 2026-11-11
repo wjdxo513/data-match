@@ -9,6 +9,7 @@ import kr.kicc.datamatch.compare.CompareTask;
 import kr.kicc.datamatch.compare.CompareTaskFactory;
 import kr.kicc.datamatch.compare.MissingSide;
 import kr.kicc.datamatch.compare.PairResult;
+import kr.kicc.datamatch.compare.PairResult.DuplicateCount;
 import kr.kicc.datamatch.compare.PairStatus;
 import kr.kicc.datamatch.compare.RowStatus;
 import kr.kicc.datamatch.compare.Side;
@@ -63,7 +64,7 @@ public class CompareController {
                         : ColumnSpec.decrypted(c.getName(), c.getDecrypt().getPolicy()))
                 .collect(Collectors.toList());
         CompareTask task = taskFactory.create(request.getEnvA(), request.getEnvB(), request.getOwner(), request.getTable(),
-                columns, request.getPairsText());
+                request.getKeyColumn(), columns, request.getPairsText());
         CompareJob job = jobs.start(task);
         return new StartResponse(job.id(), job.total());
     }
@@ -85,15 +86,18 @@ public class CompareController {
         List<PairResult> results = jobs.results(jobId);
         CompareTask task = jobs.get(jobId).task();
         Condition condition = new Condition(task.getEnvA(), task.getEnvB(), task.getTable().getOwner(), task.getTable().getName(),
+                task.getKeyColumn(),
                 task.getColumns().stream().map(c -> new ConditionColumn(c.getName(), c.getDecrypt())).collect(Collectors.toList()),
                 task.getComparedAt());
         long match = results.stream().filter(r -> r.getStatus() == PairStatus.MATCH).count();
         long mismatch = results.stream().filter(r -> r.getStatus() == PairStatus.MISMATCH).count();
         long missing = results.stream().filter(r -> r.getStatus() == PairStatus.MISSING).count();
+        long duplicate = results.stream().filter(r -> r.getStatus() == PairStatus.DUPLICATE).count();
         List<SummaryItem> items = results.stream()
-                .map(r -> new SummaryItem(r.getIndex(), r.getA(), r.getB(), r.getStatus(), r.getMismatchCount(), r.getMissing()))
+                .map(r -> new SummaryItem(r.getIndex(), r.getA(), r.getB(), r.getStatus(), r.getMismatchCount(), r.getMissing(),
+                        r.getDuplicate()))
                 .collect(Collectors.toList());
-        return new SummaryResponse(condition, new Counts(results.size(), match, mismatch, missing), items);
+        return new SummaryResponse(condition, new Counts(results.size(), match, mismatch, missing, duplicate), items);
     }
 
     @GetMapping("/api/compare/{jobId}/pairs/{index}")
@@ -107,7 +111,7 @@ public class CompareController {
                 .map(f -> new DetailRow(f.getName(), f.getA(), f.getB(), f.getStatus(),
                         f.getCause() == null ? null : f.getCause().name()))
                 .collect(Collectors.toList());
-        return new DetailResponse(r.getIndex(), r.getA(), r.getB(), r.getStatus(), r.getMissing(), rows);
+        return new DetailResponse(r.getIndex(), r.getA(), r.getB(), r.getStatus(), r.getMissing(), r.getDuplicate(), rows);
     }
 
     /** 엑셀 다운로드(FR-09, TD-16). 생성 실패는 500 {@code EXCEL_FAILED}이고 서버의 결과는 그대로 남는다. */
@@ -138,6 +142,8 @@ public class CompareController {
         private String envB;
         private String owner;
         private String table;
+        /** 비교 키 컬럼(필수, PRD PA-10). */
+        private String keyColumn;
         private List<ColumnRequest> columns;
         private String pairsText;
     }
@@ -189,6 +195,7 @@ public class CompareController {
         String envB;
         String owner;
         String table;
+        String keyColumn;
         List<ConditionColumn> columns;
         String comparedAt;
     }
@@ -206,6 +213,7 @@ public class CompareController {
         long match;
         long mismatch;
         long missing;
+        long duplicate;
     }
 
     @Value
@@ -216,6 +224,8 @@ public class CompareController {
         PairStatus status;
         int mismatchCount;
         MissingSide missing;
+        /** 키 중복이면 양쪽 조회 건수, 아니면 null. */
+        DuplicateCount duplicate;
     }
 
     @Value
@@ -225,6 +235,7 @@ public class CompareController {
         String b;
         PairStatus status;
         MissingSide missing;
+        DuplicateCount duplicate;
         List<DetailRow> rows;
     }
 
